@@ -1,3 +1,8 @@
+##Project : Savings Calculator
+##Name: Tohme Tohme
+##Create Date: 05/09/2020
+##
+
 import math
 import os
 
