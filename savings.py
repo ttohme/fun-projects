@@ -36,13 +36,16 @@ nummonth = 0
 while new == True:
     if month_or_year== "m":
         inputm =input('Enter this month savings or press [enter] to end:  $')
-        try:
-            monthly = float(inputm)
+        if inputm !="\n":
 
-        except ValueError:
+            try:
+                monthly = float(inputm)
 
-            new = False
-            exit(print("Wrong Input"))
+            except ValueError:
+
+                new = False
+                exit(print("Wrong Input"))
+        else: break
     elif month_or_year=="y" :
         if nummonth==0:
             nummonth= int(input("Number of Months"))
