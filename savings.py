@@ -40,7 +40,7 @@ nummonth = 0
 
 while new == True:
     if month_or_year == "m":
-        inputm = input('Enter this month savings or press [done] to end:  $')
+        inputm = input("Enter this month's savings or press [done] to end:  $")
         if inputm != "done":
 
             try:
