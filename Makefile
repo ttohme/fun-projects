@@ -1,4 +1,4 @@
-.PHONY: up down logs db-init watcher evals validate test help
+.PHONY: up down logs db-init watcher evals validate test approve help
 
 ENV_FILE := infra/env/.env
 
@@ -22,6 +22,9 @@ watcher: ## Run the file watcher (requires N8N_WEBHOOK_URL env var)
 	@if [ -z "$$N8N_WEBHOOK_URL" ]; then echo "ERROR: N8N_WEBHOOK_URL is not set"; exit 1; fi
 	pip install -q -r apps/file-watcher/requirements.txt
 	python3 apps/file-watcher/watcher.py
+
+approve: db-init ## Interactively review pending approvals
+	python3 apps/orchestrator/approval_service.py review
 
 evals: ## Run promptfoo evaluation suite
 	npx --yes promptfoo@latest eval --config evals/promptfooconfig.yaml
