@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [master]
+
+jobs:
+  validate:
+    name: Validate configs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate JSON schemas
+        run: |
+          python3 -c "
+          import json, pathlib
+          for p in pathlib.Path('apps/orchestrator/schemas').glob('*.json'):
+              json.load(open(p))
+              print(f'  OK: {p}')
+          "
+
+      - name: Validate YAML files
+        run: |
+          pip install -q pyyaml
+          python3 -c "
+          import yaml
+          for f in ['infra/litellm.yaml', 'mcp/registry.yaml', 'evals/promptfooconfig.yaml']:
+              yaml.safe_load(open(f))
+              print(f'  OK: {f}')
+          "
+
+      - name: Validate SQLite schema
+        run: |
+          python3 -c "
+          import sqlite3, pathlib
+          conn = sqlite3.connect(':memory:')
+          conn.executescript(pathlib.Path('db/schema.sql').read_text())
+          tables = [t[0] for t in conn.execute(\"SELECT name FROM sqlite_master WHERE type='table'\").fetchall()]
+          assert 'jobs' in tables and 'approvals' in tables, f'Missing tables: {tables}'
+          print(f'  OK: tables = {tables}')
+          "
+
+      - name: Check CLAUDE.md @-import
+        run: |
+          first=$(head -1 CLAUDE.md)
+          [ "$first" = "@AGENTS.md" ] && echo "  OK: CLAUDE.md starts with @AGENTS.md" || (echo "ERROR: CLAUDE.md line 1 is '$first'" && exit 1)
+
+      - name: Check hook executability
+        run: |
+          for f in .codex/hooks/*.py; do
+            [ -x "$f" ] && echo "  OK: $f is executable" || (echo "ERROR: $f is not executable" && exit 1)
+          done
+
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: python3 -m pytest tests/ -v --tb=short
