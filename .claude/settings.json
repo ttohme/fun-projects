@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "todoist": {
+      "type": "http",
+      "url": "https://api.todoist.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${TODOIST_API_TOKEN}"
+      }
+    }
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(python3 -c*)",
+      "Bash(find . *)",
+      "Bash(grep *)"
+    ]
+  }
+}
