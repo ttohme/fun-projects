@@ -63,7 +63,9 @@ def test_process_file_writes_jobs(tmp_path):
     db = tmp_path / "test.db"
     f = tmp_path / "note.txt"
     f.write_text("Renew insurance.")
-    with _mock_agent([GOOD_TASK]):
+    with _mock_agent([GOOD_TASK]), \
+         patch("document_processor.PROCESSED_DIR", tmp_path / "processed"), \
+         patch("document_processor.REJECTED_DIR", tmp_path / "rejected"):
         results = process_file(f, db_path=db)
     assert "_job_id" in results[0]
     conn = open_db(db)
@@ -102,7 +104,9 @@ def test_process_file_multiple_tasks(tmp_path):
     db = tmp_path / "test.db"
     task2 = {**GOOD_TASK, "title": "Schedule annual review",
              "dedupe_key": "different-key"}
-    with _mock_agent([GOOD_TASK, task2]):
+    with _mock_agent([GOOD_TASK, task2]), \
+         patch("document_processor.PROCESSED_DIR", tmp_path / "processed"), \
+         patch("document_processor.REJECTED_DIR", tmp_path / "rejected"):
         results = process_file(f, db_path=db)
     assert len(results) == 2
     assert all("_job_id" in r for r in results)
@@ -127,7 +131,9 @@ def test_process_file_high_risk_adds_approval(tmp_path):
     f = tmp_path / "note.txt"
     f.write_text("Please send a follow-up email.")
     send_task = {**GOOD_TASK, "intent": "send_email", "approval_required": False}
-    with _mock_agent([send_task]):
+    with _mock_agent([send_task]), \
+         patch("document_processor.PROCESSED_DIR", tmp_path / "processed"), \
+         patch("document_processor.REJECTED_DIR", tmp_path / "rejected"):
         results = process_file(f, db_path=db)
     assert results[0]["approval_required"] is True
     assert "_approval_id" in results[0]
