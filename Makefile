@@ -1,4 +1,4 @@
-.PHONY: up down logs db-init watcher evals validate help
+.PHONY: up down logs db-init watcher evals validate test help
 
 ENV_FILE := infra/env/.env
 
@@ -25,6 +25,10 @@ watcher: ## Run the file watcher (requires N8N_WEBHOOK_URL env var)
 
 evals: ## Run promptfoo evaluation suite
 	npx --yes promptfoo@latest eval --config evals/promptfooconfig.yaml
+
+test: ## Run unit tests
+	pip install -q -r requirements-dev.txt
+	python3 -m pytest tests/ -v
 
 validate: ## Validate all config files (JSON, YAML, SQL)
 	@python3 -c "import json,pathlib; [json.load(open(p)) for p in pathlib.Path('apps/orchestrator/schemas').glob('*.json')]; print('  JSON schemas OK')"
