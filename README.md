@@ -46,41 +46,66 @@ Service URLs after startup:
 - Uptime Kuma health: http://localhost:3001
 - OpenHands sandbox: http://localhost:3333
 
-## Running the File Watcher
+## Makefile Targets
 
 ```bash
-pip install watchdog requests
-export N8N_WEBHOOK_URL=http://localhost:5678/webhook/file-intake
-python apps/file-watcher/watcher.py
+make up            # Start all Docker services
+make down          # Stop all Docker services
+make logs          # Tail service logs
+make db-init       # Create db/assistant.db and apply schema
+make test          # Run unit test suite (135 tests)
+make validate      # Check JSON schemas, YAML, SQL, CLAUDE.md, hook permissions
+make approve       # Interactive CLI to review and approve pending jobs
+make execute       # Run job executor once (pass ARGS="--dry-run" to preview)
+make capture       # Capture a voice/text task into the DB
+                   #   make capture DESC="buy milk" PROJECT="Inbox" DUE="tomorrow"
+make watcher       # Start the file watcher (requires N8N_WEBHOOK_URL)
+make evals         # Run promptfoo evaluation suite
 ```
+
+## Typical Daily Workflow
+
+1. **Files land in `sync/inbox/`** → watcher POSTs to n8n → email/voice/file triage → jobs inserted into SQLite
+2. **Review pending approvals**: `make approve`
+3. **Execute approved jobs**: `make execute` (dispatches to Todoist or Home Assistant)
+4. **Ad-hoc task capture**: `make capture DESC="Call dentist" PROJECT="Health"`
 
 ## Directory Map
 
 ```
-.gitignore                     Secret and runtime file exclusions
-README.md                      This file
-AGENTS.md                      Shared agent governance rules (read by all agents)
-CLAUDE.md                      Claude Code config (imports @AGENTS.md)
-.codex/                        Codex CLI config and hooks
-.claude/                       Claude Code agents and skills
+.gitignore                           Secret and runtime file exclusions
+README.md                            This file
+AGENTS.md                            Shared agent governance rules (all agents)
+CLAUDE.md                            Claude Code config (imports @AGENTS.md)
+.codex/                              Codex CLI config and security hooks
+.claude/                             Claude Code agents and skills
 apps/
-  file-watcher/watcher.py      Watches sync/inbox/ and notifies n8n
+  file-watcher/watcher.py            Watches sync/inbox/ and notifies n8n
   orchestrator/
-    workflows/                 n8n workflow JSON templates (import into n8n UI)
-    prompts/                   LLM prompt templates used by workflows
-    schemas/                   JSON Schema contracts for task objects
-db/schema.sql                  SQLite schema — apply once before first run
-evals/                         Promptfoo eval config and test cases
+    db.py                            SQLite helpers (insert/update jobs & approvals)
+    schema_validator.py              JSON Schema validation for task objects
+    triage.py                        Email intake: LLM → task object → DB
+    document_processor.py            File intake: document → task objects → DB
+    voice_intake.py                  Voice/text capture → task object → DB
+    approval_service.py              Review and approve/reject pending jobs
+    todoist_client.py                Todoist REST API client
+    hass_client.py                   Home Assistant REST API client
+    job_executor.py                  Dispatches approved jobs by intent
+    workflows/                       n8n workflow JSON stubs (import into n8n UI)
+    prompts/                         LLM prompt templates used by workflows
+    schemas/                         JSON Schema contracts for task objects
+db/schema.sql                        SQLite schema (jobs + approvals)
+evals/                               Promptfoo eval config and test cases
 infra/
-  docker-compose.yml           All services
-  litellm.yaml                 Model routing config
-  env/.env.example             Required secrets template
-mcp/registry.yaml              MCP server allowlist and trust policies
-openclaw/openclaw.json         OpenClaw gateway config
+  docker-compose.yml                 All 6 services
+  litellm.yaml                       Model routing config
+  env/.env.example                   Required secrets template
+mcp/registry.yaml                    MCP server allowlist and trust policies
+openclaw/openclaw.json               OpenClaw gateway config
 sync/
-  inbox/                       Drop files here for automatic triage
-  processed/                   Files successfully triaged and acted on
-  rejected/                    Files that failed parsing (kept untouched)
+  inbox/                             Drop files here for automatic triage
+  processed/                         Files successfully triaged
+  rejected/                          Files that failed parsing
 ```
 
 ## Agent Instructions

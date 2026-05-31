@@ -1,4 +1,4 @@
-.PHONY: up down logs db-init watcher evals validate test approve help
+.PHONY: up down logs db-init watcher evals validate test approve execute capture help
 
 ENV_FILE := infra/env/.env
 
@@ -25,6 +25,13 @@ watcher: ## Run the file watcher (requires N8N_WEBHOOK_URL env var)
 
 approve: db-init ## Interactively review pending approvals
 	python3 apps/orchestrator/approval_service.py review
+
+execute: db-init ## Run job executor once (--dry-run to preview, --watch to poll)
+	python3 apps/orchestrator/job_executor.py $(ARGS)
+
+capture: db-init ## Capture a voice/text task: make capture DESC="buy milk" [PROJECT=Inbox] [DUE=tomorrow]
+	@if [ -z "$(DESC)" ]; then echo "ERROR: DESC is required"; exit 1; fi
+	PYTHONPATH=apps/orchestrator python3 -c "from voice_intake import capture; import json; print(json.dumps(capture(description='$(DESC)', project='$(PROJECT)', due_string='$(DUE)', source_ref='cli-capture', dry_run=False, db_path=None), indent=2))"
 
 evals: ## Run promptfoo evaluation suite
 	npx --yes promptfoo@latest eval --config evals/promptfooconfig.yaml
