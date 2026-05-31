@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "__REPLACE_WITH_N8N_INSTANCE_ID__"
+  },
+  "name": "File Intake",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["intake", "file"],
+  "_setup_notes": [
+    "Import this file into n8n via Settings → Import workflow.",
+    "This workflow is triggered by apps/file-watcher/watcher.py via N8N_WEBHOOK_URL.",
+    "Required nodes to configure after import:",
+    "  1. Webhook — POST /webhook/file-intake; receives file metadata from watcher.py",
+    "  2. Read Binary File — read the file from the path in the webhook payload",
+    "  3. Extract text — OCR for images, PDF text extraction, plain read for text files",
+    "  4. HTTP Request (LiteLLM) — POST to http://litellm:4000/chat/completions, model=assistant-small",
+    "  5. Loop Over Items — iterate over the returned task array",
+    "  6. IF node — branch on approval_required flag",
+    "  7. Wait node — approval gate for flagged documents",
+    "  8. Todoist Create Task — set credentials from TODOIST_API_TOKEN",
+    "  9. Move File — move to sync/processed/ on success, sync/rejected/ on failure",
+    "  10. SQLite Insert — write audit row to db/assistant.db jobs table",
+    "Source file must never be deleted until the jobs row is committed."
+  ]
+}

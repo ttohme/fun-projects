@@ -1,0 +1,55 @@
+# MCP Server Registry
+# Consumed by .codex/hooks/pre_tool_use_policy.py and openclaw.
+# Changing write_policy for any entry requires a matching evals regression case.
+
+global_policies:
+  default_unknown_server: deny      # reject any MCP server not listed here
+  default_write_policy: approval    # writes always need a human gate
+  default_read_policy: allow        # reads auto-proceed
+  approval_timeout_seconds: 300     # pause for up to 5 min waiting for human
+
+servers:
+  todoist:
+    display_name: Todoist (Official)
+    type: official
+    transport: http
+    base_url: "https://api.todoist.com/mcp"
+    auth:
+      type: bearer
+      env_var: TODOIST_API_TOKEN
+    write_policy: write_with_approval
+    read_policy: allow
+    enabled: true
+    notes: >
+      Source of truth for tasks. Never delete tasks without explicit user approval.
+      Captures from inbox-triage and voice-to-task workflows must include a due date.
+
+  home_assistant_local:
+    display_name: Home Assistant (Local)
+    type: self_hosted
+    transport: stdio
+    command: ["uvx", "hass-mcp"]
+    env:
+      HASS_TOKEN: "${HASS_TOKEN}"
+      HASS_URL: "${HASS_URL}"
+    write_policy: read_only
+    read_policy: allow
+    enabled: true
+    notes: >
+      Read-only at MCP level. State-changing actions (lights, locks, alarms) must
+      go through the home-actions n8n workflow with a mandatory approval step.
+
+  pipedream_optional:
+    display_name: Pipedream Connect (Optional)
+    type: vendor
+    transport: http
+    base_url: "https://mcp.pipedream.com"
+    auth:
+      type: bearer
+      env_var: PIPEDREAM_API_TOKEN
+    write_policy: write_with_approval
+    read_policy: allow
+    enabled: false
+    notes: >
+      Optional cloud connector for SaaS integrations. Enable only when a specific
+      workflow requires a service not covered by n8n native nodes.

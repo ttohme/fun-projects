@@ -1,0 +1,27 @@
+{
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "__REPLACE_WITH_N8N_INSTANCE_ID__"
+  },
+  "name": "Coding Jobs",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["coding", "automation"],
+  "_setup_notes": [
+    "Import this file into n8n via Settings → Import workflow.",
+    "Required nodes to configure after import:",
+    "  1. Webhook or Todoist Trigger — triggered by task label 'code' or direct webhook",
+    "  2. HTTP Request (LiteLLM risk check) — assess risk level before routing",
+    "  3. IF node — branch: low-risk local worktree vs high-risk OpenHands sandbox",
+    "  4a. Low-risk path: HTTP Request → Codex/Claude Code API",
+    "  4b. High-risk path: HTTP Request → OpenHands API at http://openhands:3000",
+    "  5. Wait node — approval gate for: package installs, git push, file deletes, external effects",
+    "  6. Poll / Webhook — monitor job completion from OpenHands",
+    "  7. Todoist Update Task — add completion comment and close task",
+    "  8. SQLite Insert — write audit row to db/assistant.db jobs table",
+    "All dependency installs, git pushes, and shell commands must go through the sandbox path."
+  ]
+}

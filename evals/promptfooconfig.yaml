@@ -1,0 +1,61 @@
+description: "Personal AI Assistant — Intake Triage Prompt Evaluation"
+
+providers:
+  - id: openai:gpt-4o-mini
+    label: openai-small
+    config:
+      temperature: 0.1
+  - id: anthropic:claude-haiku-4-5
+    label: anthropic-haiku
+    config:
+      temperature: 0.1
+  - id: ollama:llama3.1
+    label: local-llama
+    config:
+      temperature: 0.1
+
+prompts:
+  - file://apps/orchestrator/prompts/triage-agent.md
+
+defaultTest:
+  vars:
+    source_type: email
+    source_ref: "test-ref-001"
+
+tests:
+  - description: "Simple task email classifies as create_task with high confidence"
+    vars:
+      input_content: |
+        Subject: Dentist Appointment Reminder
+        Hey, just a reminder to book your dentist appointment for next month.
+        Dr. Smith's office number is 555-0100.
+      source_type: email
+      source_ref: "email-dentist-001"
+    assert:
+      - type: is-json
+      - type: javascript
+        value: |
+          const obj = JSON.parse(output);
+          return obj.intent === 'create_task' && obj.confidence >= 0.7;
+      - type: javascript
+        value: |
+          const obj = JSON.parse(output);
+          return typeof obj.title === 'string' && obj.title.length > 0;
+
+  - description: "Email requesting outbound reply sets approval_required=true"
+    vars:
+      input_content: |
+        Subject: Draft reply
+        Please draft and send a reply to John confirming the 3pm meeting tomorrow.
+      source_type: email
+      source_ref: "email-reply-001"
+    assert:
+      - type: is-json
+      - type: javascript
+        value: |
+          const obj = JSON.parse(output);
+          return obj.approval_required === true;
+      - type: javascript
+        value: |
+          const obj = JSON.parse(output);
+          return obj.intent === 'send_email';

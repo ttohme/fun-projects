@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "approval-request.schema.json",
+  "title": "Approval Request",
+  "description": "Payload sent when a workflow node requires human approval.",
+  "type": "object",
+  "required": ["job_id", "requested_action", "payload_summary"],
+  "additionalProperties": false,
+  "properties": {
+    "job_id": {
+      "type": "integer",
+      "description": "FK to jobs.id in the SQLite schema."
+    },
+    "requested_action": {
+      "type": "string",
+      "description": "Human-readable description of what will happen if approved."
+    },
+    "payload_summary": {
+      "type": "object",
+      "description": "Subset of the job payload safe to display in the approval UI."
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "default": 300,
+      "description": "Seconds before the approval request auto-expires."
+    },
+    "notification_channel": {
+      "type": "string",
+      "enum": ["email", "push", "n8n_wait_node"],
+      "default": "n8n_wait_node"
+    }
+  }
+}
