@@ -26,7 +26,10 @@ model_list:
   - model_name: local-private
     litellm_params:
       model: ollama/llama3.1
-      api_base: http://host.docker.internal:11434
+      # Points at the Windows PC's Ollama over the tailnet (set OLLAMA_BASE_URL
+      # in infra/env/.env, e.g. http://windows-pc.tailnet.ts.net:11434).
+      # Falls back to host.docker.internal for single-machine setups.
+      api_base: os.environ/OLLAMA_BASE_URL
     model_info:
       mode: chat
       base_model: llama3.1

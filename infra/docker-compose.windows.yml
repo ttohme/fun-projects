@@ -1,0 +1,38 @@
+# Windows PC — "the muscle"
+# GPU-backed local model + sandboxed code execution. Start on demand.
+#
+#   docker compose -f infra/docker-compose.windows.yml up -d
+#
+# Ollama is typically installed natively on Windows (ollama serve, port 11434)
+# to get GPU acceleration — Docker Desktop GPU passthrough is finicky. This file
+# runs OpenHands in Docker Desktop. The Pi 5's LiteLLM reaches Ollama via
+# OLLAMA_BASE_URL pointed at this machine's tailnet hostname.
+version: "3.9"
+
+networks:
+  ai-net:
+    driver: bridge
+
+volumes:
+  openhands_data:
+
+services:
+
+  openhands:
+    # WARNING: mounts the Docker socket — restrict access to trusted users only.
+    image: ghcr.io/all-hands-ai/openhands:main
+    restart: unless-stopped
+    env_file: ./env/.env
+    environment:
+      LLM_MODEL: ${OPENHANDS_LLM_MODEL}
+      LLM_API_KEY: ${OPENHANDS_LLM_API_KEY}
+      # Reach the Pi 5's LiteLLM over the tailnet, e.g. http://pi5.tailnet.ts.net:4000
+      LLM_BASE_URL: ${OPENHANDS_LLM_BASE_URL}
+      SANDBOX_RUNTIME_CONTAINER_IMAGE: docker.io/all-hands-ai/runtime:main
+    ports:
+      - "3333:3000"
+    volumes:
+      - openhands_data:/opt/workspace
+      # On Windows with Docker Desktop the socket path is //var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [ai-net]

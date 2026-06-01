@@ -1,0 +1,80 @@
+# Raspberry Pi 5 — "the brain"
+# Core pipeline: workflow engine, model router, and the shared Redis queue.
+# Langfuse and Uptime Kuma live on the Pi 4 (see docker-compose.pi4.yml).
+# Ollama and OpenHands live on the Windows PC.
+#
+#   docker compose -f infra/docker-compose.pi5.yml up -d
+#
+# Reaches the Pi 4's Langfuse and the Windows Ollama over the tailnet via
+# LANGFUSE_HOST and OLLAMA_BASE_URL in infra/env/.env.
+version: "3.9"
+
+networks:
+  ai-net:
+    driver: bridge
+
+volumes:
+  n8n_data:
+  redis_data:
+
+services:
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks: [ai-net]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    restart: unless-stopped
+    env_file: ./env/.env
+    command: ["--config", "/app/litellm.yaml", "--port", "4000"]
+    # Lets the container resolve host.docker.internal for single-machine
+    # fallback; tailnet hostnames resolve normally.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm.yaml:/app/litellm.yaml:ro
+    networks: [ai-net]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health/liveliness"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    env_file: ./env/.env
+    environment:
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
+      N8N_LOG_LEVEL: info
+      WEBHOOK_URL: ${N8N_WEBHOOK_BASE_URL}
+      GENERIC_TIMEZONE: "UTC"
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ../apps/orchestrator/workflows:/opt/n8n-workflows:ro
+    networks: [ai-net]
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5678/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 10

@@ -39,6 +39,11 @@ docker compose -f infra/docker-compose.yml up -d
 docker compose -f infra/docker-compose.yml ps
 ```
 
+For a multi-machine deployment (e.g. Raspberry Pi 5 + Pi 4 + Windows PC tied by
+Tailscale), see [DEPLOYMENT.md](DEPLOYMENT.md), which uses the split compose
+files `infra/docker-compose.pi5.yml`, `infra/docker-compose.pi4.yml`, and
+`infra/docker-compose.windows.yml`.
+
 Service URLs after startup:
 - n8n UI: http://localhost:5678
 - LiteLLM proxy: http://localhost:4000
