@@ -83,13 +83,16 @@ docker compose -f infra/docker-compose.windows.yml up -d
 ### 4. Pi 5 — the brain
 ```bash
 cp infra/env/.env.example infra/env/.env   # same secrets; tailnet hostnames for Pi4 + Windows
+scripts/bootstrap.sh                       # venv, deps, DB, dirs (idempotent)
 docker compose -f infra/docker-compose.pi5.yml up -d
 
-make db-init                               # create db/assistant.db
-./openclaw --config openclaw/openclaw.json # start the gateway (loopback:18789)
-make watcher                               # watch sync/inbox/ → n8n
-make execute ARGS=--watch                  # auto-dispatch approved jobs
+# Reboot-survivable native services (watcher, executor, OpenClaw, daily backup):
+sudo INSTALL_OPENCLAW=1 scripts/install-services.sh
 ```
+
+This replaces running `make watcher` / `make execute` by hand — systemd keeps
+them alive across crashes and reboots. See [`infra/systemd/README.md`](infra/systemd/README.md).
+For a quick manual run instead: `make watcher` and `make execute ARGS=--watch`.
 
 ### 5. n8n configuration (one time, in the UI)
 Open `http://pi5.tailnet.ts.net:5678`, import the stubs from

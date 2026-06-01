@@ -1,0 +1,21 @@
+[Unit]
+Description=AI Assistant — inbox file watcher
+Documentation=https://github.com/ttohme/fun-projects
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__REPO__
+EnvironmentFile=__REPO__/infra/env/.env
+ExecStart=__REPO__/.venv/bin/python apps/file-watcher/watcher.py
+Restart=on-failure
+RestartSec=5
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

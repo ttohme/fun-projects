@@ -1,0 +1,11 @@
+[Unit]
+Description=AI Assistant — daily DB backup
+Documentation=https://github.com/ttohme/fun-projects
+
+[Timer]
+# Daily at 03:30 local, catching up if the machine was asleep.
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,4 +1,5 @@
-.PHONY: up down logs db-init watcher evals validate test approve execute capture help
+.PHONY: up down logs db-init watcher evals validate test approve execute capture \
+        bootstrap backup healthcheck install-services uninstall-services help
 
 ENV_FILE := infra/env/.env
 
@@ -33,6 +34,21 @@ capture: db-init ## Capture a voice/text task: make capture DESC="buy milk" [PRO
 	@if [ -z "$(DESC)" ]; then echo "ERROR: DESC is required"; exit 1; fi
 	PYTHONPATH=apps/orchestrator python3 -c "from voice_intake import capture; import json; print(json.dumps(capture(description='$(DESC)', project='$(PROJECT)', due_string='$(DUE)', source_ref='cli-capture', dry_run=False, db_path=None), indent=2))"
 
+bootstrap: ## One-shot setup for a fresh machine (venv, deps, DB, dirs, .env)
+	scripts/bootstrap.sh
+
+backup: ## Snapshot the SQLite DB (WAL-safe, gzipped, rotated)
+	scripts/backup-db.sh
+
+healthcheck: ## Probe local/tailnet service endpoints (exits non-zero if any down)
+	scripts/healthcheck.sh
+
+install-services: ## Install reboot-survivable systemd units (run with sudo)
+	sudo scripts/install-services.sh
+
+uninstall-services: ## Remove the assistant systemd units (run with sudo)
+	sudo scripts/uninstall-services.sh
+
 evals: ## Run promptfoo evaluation suite
 	npx --yes promptfoo@latest eval --config evals/promptfooconfig.yaml
 
@@ -46,6 +62,7 @@ validate: ## Validate all config files (JSON, YAML, SQL)
 	@python3 -c "import sqlite3,pathlib; conn=sqlite3.connect(':memory:'); conn.executescript(pathlib.Path('db/schema.sql').read_text()); print('  SQLite schema OK')"
 	@head -1 CLAUDE.md | grep -q '^@AGENTS.md$$' && echo '  CLAUDE.md @-import OK' || echo '  ERROR: CLAUDE.md line 1 must be @AGENTS.md'
 	@ls -la .codex/hooks/*.py | grep -q 'rwx' && echo '  Hook permissions OK' || echo '  ERROR: hooks not executable'
+	@for s in scripts/*.sh; do bash -n "$$s" || exit 1; done && echo '  Shell scripts OK'
 
 $(ENV_FILE):
 	@echo "ERROR: $(ENV_FILE) not found. Copy infra/env/.env.example and fill in secrets."

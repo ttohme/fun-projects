@@ -59,6 +59,13 @@ jobs:
             [ -x "$f" ] && echo "  OK: $f is executable" || (echo "ERROR: $f is not executable" && exit 1)
           done
 
+      - name: Check shell scripts
+        run: |
+          for s in scripts/*.sh; do
+            bash -n "$s" && echo "  OK: $s syntax" || (echo "ERROR: $s syntax" && exit 1)
+            [ -x "$s" ] || (echo "ERROR: $s not executable" && exit 1)
+          done
+
   test:
     name: Unit tests
     runs-on: ubuntu-latest

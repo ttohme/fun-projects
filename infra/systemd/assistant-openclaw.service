@@ -1,0 +1,21 @@
+[Unit]
+Description=AI Assistant — OpenClaw gateway
+Documentation=https://github.com/ttohme/fun-projects
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__REPO__
+EnvironmentFile=__REPO__/infra/env/.env
+# OpenClaw is an external binary; set OPENCLAW_BIN in the env file (or edit here)
+# to its install path, e.g. /usr/local/bin/openclaw.
+ExecStart=__OPENCLAW_BIN__ --config __REPO__/openclaw/openclaw.json
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

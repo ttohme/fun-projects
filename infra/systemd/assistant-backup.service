@@ -1,0 +1,10 @@
+[Unit]
+Description=AI Assistant — SQLite DB backup
+Documentation=https://github.com/ttohme/fun-projects
+
+[Service]
+Type=oneshot
+User=__USER__
+WorkingDirectory=__REPO__
+EnvironmentFile=__REPO__/infra/env/.env
+ExecStart=__REPO__/scripts/backup-db.sh

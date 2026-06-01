@@ -66,7 +66,16 @@ make capture       # Capture a voice/text task into the DB
                    #   make capture DESC="buy milk" PROJECT="Inbox" DUE="tomorrow"
 make watcher       # Start the file watcher (requires N8N_WEBHOOK_URL)
 make evals         # Run promptfoo evaluation suite
+make bootstrap     # Fresh-machine setup: venv, deps, DB, dirs, .env
+make backup        # WAL-safe gzipped DB snapshot with rotation
+make healthcheck   # Probe service endpoints (exits non-zero if any down)
+make install-services    # Install reboot-survivable systemd units (sudo)
+make uninstall-services  # Remove the systemd units (sudo)
 ```
+
+For always-on operation on the Pi 5, `make install-services` registers systemd
+units for the watcher, executor, OpenClaw, and a daily DB backup — see
+[`infra/systemd/README.md`](infra/systemd/README.md).
 
 ## Typical Daily Workflow
 
