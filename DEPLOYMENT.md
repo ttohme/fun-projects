@@ -55,6 +55,13 @@ Replace `*.tailnet.ts.net` with your actual Tailscale MagicDNS names
 tailscale up
 tailscale status      # note the MagicDNS name of each machine
 ```
+Tag each machine by role (`tag:brain` = Pi 5, `tag:monitor` = Pi 4,
+`tag:muscle` = Windows) and paste `infra/tailscale/acl.json` into the admin
+console's Access Controls. It locks cross-machine traffic down to only the
+service-to-service ports this system needs.
+
+File capture across devices uses Syncthing on the shared `sync/inbox/` folder —
+see [`infra/syncthing/README.md`](infra/syncthing/README.md).
 
 ### 2. Pi 4 — the monitor
 ```bash
