@@ -26,7 +26,9 @@ dest="$BACKUP_DIR/assistant-$ts.db"
 
 # Python's sqlite3.backup() is WAL-aware and produces a consistent snapshot of a
 # live DB; it then runs integrity_check. Uses the stdlib so no sqlite3 CLI needed.
-python3 - "$DB_PATH" "$dest" <<'PY'
+# Use || to capture exit code without triggering set -e.
+py_exit=0
+python3 - "$DB_PATH" "$dest" <<'PY' || py_exit=$?
 import sqlite3, sys
 src_path, dest_path = sys.argv[1], sys.argv[2]
 src = sqlite3.connect(src_path)
@@ -40,8 +42,8 @@ if ok != "ok":
     sys.exit(1)
 PY
 
-if [ $? -ne 0 ]; then
-  echo "backup-db: integrity check FAILED for $dest" >&2
+if [ "$py_exit" -ne 0 ]; then
+  echo "backup-db: integrity check FAILED for $dest — snapshot discarded" >&2
   rm -f "$dest"
   exit 1
 fi

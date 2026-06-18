@@ -107,7 +107,10 @@ def triage(
                              source_type=source_type, source_ref=source_ref)
 
     raw = call_litellm(rendered)
-    task = json.loads(raw)
+    try:
+        task = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"LLM returned non-JSON for {source_ref!r}: {raw[:300]!r}") from exc
 
     validate_task_object(task)
 
@@ -120,25 +123,28 @@ def triage(
 
     if not dry_run:
         conn = open_db(db_path or DB_PATH)
-        job_id = insert_job(
-            conn,
-            source_type=source_type,
-            source_ref=source_ref,
-            payload=task,
-            intent=task.get("intent"),
-            approval_required=task["approval_required"],
-        )
-        if job_id is None:
-            task["_skipped"] = "duplicate"
-        else:
-            task["_job_id"] = job_id
-            if task["approval_required"]:
-                approval_id = insert_approval(
-                    conn,
-                    job_id=job_id,
-                    requested_action=f"Create task: {task.get('title', '')}",
-                )
-                task["_approval_id"] = approval_id
+        try:
+            job_id = insert_job(
+                conn,
+                source_type=source_type,
+                source_ref=source_ref,
+                payload=task,
+                intent=task.get("intent"),
+                approval_required=task["approval_required"],
+            )
+            if job_id is None:
+                task["_skipped"] = "duplicate"
+            else:
+                task["_job_id"] = job_id
+                if task["approval_required"]:
+                    approval_id = insert_approval(
+                        conn,
+                        job_id=job_id,
+                        requested_action=f"Create task: {task.get('title', '')}",
+                    )
+                    task["_approval_id"] = approval_id
+        finally:
+            conn.close()
 
     return task
 

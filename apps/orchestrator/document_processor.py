@@ -77,8 +77,11 @@ def call_document_agent(*, document_text: str, file_name: str, source_type: str)
     resp = http.post(url, json=body, headers=headers, timeout=60)
     resp.raise_for_status()
     raw = resp.json()["choices"][0]["message"]["content"]
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Document agent returned non-JSON for {file_name!r}: {raw[:300]!r}") from exc
 
-    parsed = json.loads(raw)
     # Model may return {"tasks": [...]} or a bare array
     if isinstance(parsed, list):
         return parsed
@@ -115,51 +118,56 @@ def process_file(
     results = []
     all_valid = True
 
-    for raw_task in tasks:
-        # Copy so we never mutate the list returned by the model call
-        task = dict(raw_task)
-        # Drop low-confidence tasks as per document-triage-agent rules
-        if task.get("confidence", 1.0) < CONFIDENCE_THRESHOLD:
-            task["_skipped"] = "low_confidence"
+    # Open one connection for the whole batch; None when dry_run.
+    conn = open_db(db_path or DB_PATH) if not dry_run else None
+    try:
+        for raw_task in tasks:
+            # Copy so we never mutate the list returned by the model call
+            task = dict(raw_task)
+            # Drop low-confidence tasks as per document-triage-agent rules
+            if task.get("confidence", 1.0) < CONFIDENCE_THRESHOLD:
+                task["_skipped"] = "low_confidence"
+                results.append(task)
+                continue
+
+            try:
+                validate_task_object(task)
+            except ValidationError as exc:
+                task["_error"] = str(exc)
+                task["_skipped"] = "validation_failure"
+                all_valid = False
+                results.append(task)
+                continue
+
+            task["approval_required"] = should_require_approval(task)
+            if not task.get("dedupe_key"):
+                task["dedupe_key"] = make_dedupe_key(source_ref, task.get("title", ""))
+
+            if conn is not None:
+                job_id = insert_job(
+                    conn,
+                    source_type="file",
+                    source_ref=source_ref,
+                    payload=task,
+                    intent=task.get("intent"),
+                    approval_required=task["approval_required"],
+                )
+                if job_id is None:
+                    task["_skipped"] = "duplicate"
+                else:
+                    task["_job_id"] = job_id
+                    if task["approval_required"]:
+                        approval_id = insert_approval(
+                            conn,
+                            job_id=job_id,
+                            requested_action=f"Create task: {task.get('title', '')}",
+                        )
+                        task["_approval_id"] = approval_id
+
             results.append(task)
-            continue
-
-        try:
-            validate_task_object(task)
-        except ValidationError as exc:
-            task["_error"] = str(exc)
-            task["_skipped"] = "validation_failure"
-            all_valid = False
-            results.append(task)
-            continue
-
-        task["approval_required"] = should_require_approval(task)
-        if not task.get("dedupe_key"):
-            task["dedupe_key"] = make_dedupe_key(source_ref, task.get("title", ""))
-
-        if not dry_run:
-            conn = open_db(db_path or DB_PATH)
-            job_id = insert_job(
-                conn,
-                source_type="file",
-                source_ref=source_ref,
-                payload=task,
-                intent=task.get("intent"),
-                approval_required=task["approval_required"],
-            )
-            if job_id is None:
-                task["_skipped"] = "duplicate"
-            else:
-                task["_job_id"] = job_id
-                if task["approval_required"]:
-                    approval_id = insert_approval(
-                        conn,
-                        job_id=job_id,
-                        requested_action=f"Create task: {task.get('title', '')}",
-                    )
-                    task["_approval_id"] = approval_id
-
-        results.append(task)
+    finally:
+        if conn is not None:
+            conn.close()
 
     if not dry_run:
         dest = PROCESSED_DIR if all_valid else REJECTED_DIR

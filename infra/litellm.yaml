@@ -47,6 +47,10 @@ general_settings:
   database_url: null
   telemetry: false
   drop_params: true
+  # Hard budget cap: refuse requests once spend reaches this USD amount.
+  # Prevents runaway API costs. Adjust or remove if you need more headroom.
+  max_budget: 20
+  budget_duration: 30d
 
 litellm_settings:
   success_callback: ["langfuse"]

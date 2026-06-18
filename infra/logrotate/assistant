@@ -1,0 +1,22 @@
+# Logrotate config for the assistant's native log files.
+# Install: sudo cp infra/logrotate/assistant /etc/logrotate.d/assistant
+# Test:    sudo logrotate --debug /etc/logrotate.d/assistant
+#
+# Rotates logs/tool_use.jsonl (Codex audit log) and any *.log files in logs/.
+# The watcher and executor log to stdout → systemd journal, so no rotation
+# needed there (journald handles it via SystemMaxUse in /etc/systemd/journald.conf).
+
+REPO_LOGS=/home/REPLACE_USER/fun-projects/logs
+
+$REPO_LOGS/tool_use.jsonl
+$REPO_LOGS/*.log
+{
+    daily
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 REPLACE_USER REPLACE_USER
+    # No postrotate needed: the hook always opens the file by name, not holds an fd.
+}

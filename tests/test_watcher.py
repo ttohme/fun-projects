@@ -16,6 +16,7 @@ sys.modules.setdefault("watchdog.observers", watchdog_stub.observers)
 # Provide the real base class names the module uses
 watchdog_stub.events.FileSystemEventHandler = object
 watchdog_stub.events.FileCreatedEvent = MagicMock
+watchdog_stub.events.FileMovedEvent = MagicMock
 
 import watcher as w
 
@@ -138,3 +139,47 @@ def test_missing_file_does_not_raise(tmp_path, monkeypatch):
     # do not create the file — simulate disappearance between event and stat
     handler = w.InboxHandler()
     handler._post_to_n8n(gone)  # must not raise
+
+
+# ── Syncthing on_moved support ────────────────────────────────────────────────
+
+def _make_moved_event(src_path: str, dest_path: str, is_dir: bool = False):
+    event = MagicMock()
+    event.src_path = src_path
+    event.dest_path = dest_path
+    event.is_directory = is_dir
+    return event
+
+
+def test_on_moved_syncthing_rename_is_processed(tmp_path):
+    """Syncthing renames .syncthing.<name>.tmp → <name>, producing a moved event."""
+    final = tmp_path / "report.pdf"
+    final.touch()
+    handler = w.InboxHandler()
+    event = _make_moved_event(
+        str(tmp_path / ".syncthing.report.pdf.tmp"),
+        str(final),
+    )
+    with patch.object(handler, "_post_to_n8n") as mock_post:
+        handler.on_moved(event)
+        mock_post.assert_called_once_with(final)
+
+
+def test_on_moved_directory_is_skipped(tmp_path):
+    handler = w.InboxHandler()
+    event = _make_moved_event(str(tmp_path / "old"), str(tmp_path / "new"), is_dir=True)
+    with patch.object(handler, "_post_to_n8n") as mock_post:
+        handler.on_moved(event)
+        mock_post.assert_not_called()
+
+
+def test_on_moved_tmp_dest_is_skipped(tmp_path):
+    """If the destination is still a temp file, skip it."""
+    handler = w.InboxHandler()
+    event = _make_moved_event(
+        str(tmp_path / "a.tmp"),
+        str(tmp_path / "b.tmp"),
+    )
+    with patch.object(handler, "_post_to_n8n") as mock_post:
+        handler.on_moved(event)
+        mock_post.assert_not_called()

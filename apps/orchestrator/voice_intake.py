@@ -100,25 +100,28 @@ def capture(
 
     if not dry_run:
         conn = open_db(db_path or DB_PATH)
-        job_id = insert_job(
-            conn,
-            source_type="voice",
-            source_ref=ref,
-            payload=task,
-            intent=task.get("intent"),
-            approval_required=task["approval_required"],
-        )
-        if job_id is None:
-            task["_skipped"] = "duplicate"
-        else:
-            task["_job_id"] = job_id
-            # Voice captures always get an approval row — user confirms before Todoist write
-            approval_id = insert_approval(
+        try:
+            job_id = insert_job(
                 conn,
-                job_id=job_id,
-                requested_action=f"Create task: {task.get('title', '')}",
+                source_type="voice",
+                source_ref=ref,
+                payload=task,
+                intent=task.get("intent"),
+                approval_required=task["approval_required"],
             )
-            task["_approval_id"] = approval_id
+            if job_id is None:
+                task["_skipped"] = "duplicate"
+            else:
+                task["_job_id"] = job_id
+                # Voice captures always get an approval row — user confirms before Todoist write
+                approval_id = insert_approval(
+                    conn,
+                    job_id=job_id,
+                    requested_action=f"Create task: {task.get('title', '')}",
+                )
+                task["_approval_id"] = approval_id
+        finally:
+            conn.close()
 
     return task
 

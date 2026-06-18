@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
-from watchdog.events import FileSystemEventHandler, FileCreatedEvent
+from watchdog.events import FileCreatedEvent, FileMovedEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -44,10 +44,25 @@ class InboxHandler(FileSystemEventHandler):
         if event.is_directory:
             return
         path = Path(event.src_path)
-        if path.name.startswith(".") or path.suffix in SKIP_SUFFIXES:
-            logger.debug(f'"Skipping temp/hidden file: {path.name}"')
+        if self._should_skip(path):
             return
         self._post_to_n8n(path)
+
+    def on_moved(self, event: FileMovedEvent):
+        # Syncthing writes .syncthing.<name>.tmp then renames → FileMovedEvent.
+        # Only care about the destination landing in the watched dir.
+        if event.is_directory:
+            return
+        dest = Path(event.dest_path)
+        if self._should_skip(dest):
+            return
+        self._post_to_n8n(dest)
+
+    def _should_skip(self, path: Path) -> bool:
+        if path.name.startswith(".") or path.suffix in SKIP_SUFFIXES:
+            logger.debug(f'"Skipping temp/hidden file: {path.name}"')
+            return True
+        return False
 
     def _post_to_n8n(self, path: Path, retries: int = 3):
         if not WEBHOOK_URL:

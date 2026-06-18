@@ -1,0 +1,28 @@
+# Syncthing ignore patterns for the assistant-inbox folder.
+# Place this file (or paste its contents into the Ignore Patterns box in the
+# Syncthing Web UI) on every device that syncs sync/inbox/.
+#
+# Syncthing docs: https://docs.syncthing.net/users/ignoring.html
+
+# Git bookkeeping files — these are local-only and must not sync
+.gitignore
+.gitkeep
+
+# Syncthing's own files
+.stfolder
+.stignore
+~syncthing~*
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE temp files (these match the watcher's SKIP_SUFFIXES set)
+*.tmp
+*.swp
+*.part
+*.crdownload
+
+# Hidden files (dotfiles) — the watcher skips these anyway
+.*

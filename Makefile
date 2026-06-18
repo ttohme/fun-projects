@@ -1,5 +1,6 @@
 .PHONY: up down logs db-init watcher evals validate test approve execute capture \
-        bootstrap backup healthcheck install-services uninstall-services help
+        bootstrap backup restore-db healthcheck install-services uninstall-services \
+        logrotate-install help
 
 ENV_FILE := infra/env/.env
 
@@ -39,6 +40,16 @@ bootstrap: ## One-shot setup for a fresh machine (venv, deps, DB, dirs, .env)
 
 backup: ## Snapshot the SQLite DB (WAL-safe, gzipped, rotated)
 	scripts/backup-db.sh
+
+restore-db: ## Restore DB from a backup: make restore-db SNAP=backups/assistant-TIMESTAMP.db.gz
+	@if [ -z "$(SNAP)" ]; then echo "ERROR: SNAP is required. Usage: make restore-db SNAP=backups/assistant-....db.gz"; exit 1; fi
+	scripts/restore-db.sh "$(SNAP)"
+
+logrotate-install: ## Install logrotate config for logs/ (run with sudo, edit USER first)
+	@echo "Edit infra/logrotate/assistant — replace REPLACE_USER with your username — then re-run."
+	@grep -q REPLACE_USER infra/logrotate/assistant && (echo "ERROR: REPLACE_USER not substituted"; exit 1) || true
+	sudo cp infra/logrotate/assistant /etc/logrotate.d/assistant
+	sudo logrotate --debug /etc/logrotate.d/assistant
 
 healthcheck: ## Probe local/tailnet service endpoints (exits non-zero if any down)
 	scripts/healthcheck.sh
