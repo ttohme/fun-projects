@@ -8,8 +8,8 @@ voice-to-task webhook or directly from a CLI shortcut.
 
 Environment variables:
     LITELLM_BASE_URL  (default: http://localhost:4000)
-    LITELLM_API_KEY   (default: empty)
-    DB_PATH           (default: db/assistant.db)
+    LITELLM_MASTER_KEY (default: empty)
+    DB_PATH            (default: db/assistant.db)
 """
 import argparse
 import json
@@ -22,7 +22,7 @@ import requests as http
 from db import insert_approval, insert_job, make_dedupe_key, open_db
 from schema_validator import ValidationError, validate_task_object
 from triage import (
-    LITELLM_API_KEY,
+    LITELLM_MASTER_KEY,
     LITELLM_BASE_URL,
     _strip_frontmatter,
     should_require_approval,
@@ -50,8 +50,8 @@ def call_drafting_agent(
 
     url = f"{LITELLM_BASE_URL}/chat/completions"
     headers = {"Content-Type": "application/json"}
-    if LITELLM_API_KEY:
-        headers["Authorization"] = f"Bearer {LITELLM_API_KEY}"
+    if LITELLM_MASTER_KEY:
+        headers["Authorization"] = f"Bearer {LITELLM_MASTER_KEY}"
 
     body = {
         "model": "assistant-default",

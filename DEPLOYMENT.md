@@ -110,6 +110,46 @@ Open `http://pi5.tailnet.ts.net:5678`, import the stubs from
 | `win.tailnet:3333` | OpenHands | Coding sandbox |
 | `win.tailnet:11434` | Ollama | Local model API (internal) |
 
+## Host firewall (UFW) — Pi 5 and Pi 4
+
+Tailscale handles cross-machine auth, but it's good hygiene to restrict TCP ports
+on each Pi's host OS to the Tailscale subnet only (`100.64.0.0/10`). This way, a
+misconfigured Docker `ports:` mapping doesn't accidentally expose a service to the
+LAN or internet.
+
+```bash
+# On Pi 5 and Pi 4 — run once after Tailscale is up.
+sudo apt install ufw -y
+
+# Deny everything by default, then punch holes.
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+
+# Always allow SSH (from any interface — restrict further if preferred)
+sudo ufw allow ssh
+
+# Tailscale itself (UDP 41641 plus the tun0 interface)
+sudo ufw allow in on tailscale0
+sudo ufw allow 41641/udp
+
+# Docker-managed ports are controlled by iptables directly and bypass ufw's
+# INPUT chain, so we need to limit them via Docker's own network rather than
+# ufw rules.  Instead, edit each service in the compose file to bind to the
+# tailscale0 IP:
+#
+#   ports:
+#     - "100.x.x.x:5678:5678"   # tailscale0 IP only, not 0.0.0.0
+#
+# The tailnet ACL (infra/tailscale/acl.json) is your primary firewall for
+# inter-machine traffic.
+
+sudo ufw enable
+sudo ufw status verbose
+```
+
+> **Tip**: run `ip addr show tailscale0` to get the machine's tailnet IP, then
+> bind Docker ports to that address in the compose `ports:` stanza.
+
 ## Single-machine fallback
 
 To run everything on one box (e.g. just the Pi 5), use the combined

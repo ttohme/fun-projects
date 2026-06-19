@@ -20,7 +20,7 @@ services:
 
   openhands:
     # WARNING: mounts the Docker socket — restrict access to trusted users only.
-    image: ghcr.io/all-hands-ai/openhands:main
+    image: ghcr.io/all-hands-ai/openhands:${OPENHANDS_IMAGE_TAG:-0.38}
     restart: unless-stopped
     env_file: ./env/.env
     environment:

@@ -8,8 +8,8 @@ success or sync/rejected/ on parse/validation failure.
 
 Environment variables:
     LITELLM_BASE_URL  (default: http://localhost:4000)
-    LITELLM_API_KEY   (default: empty)
-    DB_PATH           (default: db/assistant.db)
+    LITELLM_MASTER_KEY (default: empty)
+    DB_PATH            (default: db/assistant.db)
 """
 import argparse
 import json
@@ -25,7 +25,7 @@ from schema_validator import ValidationError, validate_task_object
 from triage import (
     CONFIDENCE_THRESHOLD,
     HIGH_RISK_INTENTS,
-    LITELLM_API_KEY,
+    LITELLM_MASTER_KEY,
     LITELLM_BASE_URL,
     _strip_frontmatter,
     should_require_approval,
@@ -65,8 +65,8 @@ def call_document_agent(*, document_text: str, file_name: str, source_type: str)
 
     url = f"{LITELLM_BASE_URL}/chat/completions"
     headers = {"Content-Type": "application/json"}
-    if LITELLM_API_KEY:
-        headers["Authorization"] = f"Bearer {LITELLM_API_KEY}"
+    if LITELLM_MASTER_KEY:
+        headers["Authorization"] = f"Bearer {LITELLM_MASTER_KEY}"
 
     body = {
         "model": "assistant-small",

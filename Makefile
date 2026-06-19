@@ -4,6 +4,10 @@
 
 ENV_FILE := infra/env/.env
 
+# Prefer the project venv when available so installed deps are always found.
+PYTHON := $(if $(wildcard .venv/bin/python3),.venv/bin/python3,python3)
+PIP    := $(if $(wildcard .venv/bin/pip),.venv/bin/pip,pip)
+
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-16s %s\n", $$1, $$2}'
 
@@ -18,22 +22,22 @@ logs: ## Tail logs for all services
 
 db-init: ## Create SQLite DB and apply schema
 	@mkdir -p db
-	python3 -c "import sqlite3,pathlib; conn=sqlite3.connect('db/assistant.db'); conn.executescript(pathlib.Path('db/schema.sql').read_text()); conn.close(); print('db/assistant.db ready')"
+	$(PYTHON) -c "import sqlite3,pathlib; conn=sqlite3.connect('db/assistant.db'); conn.executescript(pathlib.Path('db/schema.sql').read_text()); conn.close(); print('db/assistant.db ready')"
 
 watcher: ## Run the file watcher (requires N8N_WEBHOOK_URL env var)
 	@if [ -z "$$N8N_WEBHOOK_URL" ]; then echo "ERROR: N8N_WEBHOOK_URL is not set"; exit 1; fi
-	pip install -q -r apps/file-watcher/requirements.txt
-	python3 apps/file-watcher/watcher.py
+	$(PIP) install -q -r apps/file-watcher/requirements.txt
+	$(PYTHON) apps/file-watcher/watcher.py
 
 approve: db-init ## Interactively review pending approvals
-	python3 apps/orchestrator/approval_service.py review
+	$(PYTHON) apps/orchestrator/approval_service.py review
 
 execute: db-init ## Run job executor once (--dry-run to preview, --watch to poll)
-	python3 apps/orchestrator/job_executor.py $(ARGS)
+	$(PYTHON) apps/orchestrator/job_executor.py $(ARGS)
 
 capture: db-init ## Capture a voice/text task: make capture DESC="buy milk" [PROJECT=Inbox] [DUE=tomorrow]
 	@if [ -z "$(DESC)" ]; then echo "ERROR: DESC is required"; exit 1; fi
-	PYTHONPATH=apps/orchestrator python3 -c "from voice_intake import capture; import json; print(json.dumps(capture(description='$(DESC)', project='$(PROJECT)', due_string='$(DUE)', source_ref='cli-capture', dry_run=False, db_path=None), indent=2))"
+	PYTHONPATH=apps/orchestrator $(PYTHON) -c "from voice_intake import capture; import json; print(json.dumps(capture(description='$(DESC)', project='$(PROJECT)', due_string='$(DUE)', source_ref='cli-capture', dry_run=False, db_path=None), indent=2))"
 
 bootstrap: ## One-shot setup for a fresh machine (venv, deps, DB, dirs, .env)
 	scripts/bootstrap.sh
@@ -64,13 +68,13 @@ evals: ## Run promptfoo evaluation suite
 	npx --yes promptfoo@latest eval --config evals/promptfooconfig.yaml
 
 test: ## Run unit tests
-	pip install -q -r requirements-dev.txt
-	python3 -m pytest tests/ -v
+	$(PIP) install -q -r requirements-dev.txt
+	$(PYTHON) -m pytest tests/ -v
 
 validate: ## Validate all config files (JSON, YAML, SQL)
-	@python3 -c "import json,pathlib; [json.load(open(p)) for p in pathlib.Path('apps/orchestrator/schemas').glob('*.json')]; print('  JSON schemas OK')"
-	@python3 -c "import yaml,pathlib; [yaml.safe_load(open(p)) for p in ['infra/litellm.yaml','mcp/registry.yaml','evals/promptfooconfig.yaml']]; print('  YAML files OK')"
-	@python3 -c "import sqlite3,pathlib; conn=sqlite3.connect(':memory:'); conn.executescript(pathlib.Path('db/schema.sql').read_text()); print('  SQLite schema OK')"
+	@$(PYTHON) -c "import json,pathlib; [json.load(open(p)) for p in pathlib.Path('apps/orchestrator/schemas').glob('*.json')]; print('  JSON schemas OK')"
+	@$(PYTHON) -c "import yaml,pathlib; [yaml.safe_load(open(p)) for p in ['infra/litellm.yaml','mcp/registry.yaml','evals/promptfooconfig.yaml']]; print('  YAML files OK')"
+	@$(PYTHON) -c "import sqlite3,pathlib; conn=sqlite3.connect(':memory:'); conn.executescript(pathlib.Path('db/schema.sql').read_text()); print('  SQLite schema OK')"
 	@head -1 CLAUDE.md | grep -q '^@AGENTS.md$$' && echo '  CLAUDE.md @-import OK' || echo '  ERROR: CLAUDE.md line 1 must be @AGENTS.md'
 	@ls -la .codex/hooks/*.py | grep -q 'rwx' && echo '  Hook permissions OK' || echo '  ERROR: hooks not executable'
 	@for s in scripts/*.sh; do bash -n "$$s" || exit 1; done && echo '  Shell scripts OK'

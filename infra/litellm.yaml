@@ -19,6 +19,8 @@ model_list:
     litellm_params:
       model: anthropic/claude-sonnet-4-6
       api_key: os.environ/ANTHROPIC_API_KEY
+      # Claude doesn't accept response_format / seed — drop them rather than error.
+      drop_params: true
     model_info:
       mode: chat
       base_model: claude-sonnet-4-6
@@ -30,6 +32,8 @@ model_list:
       # in infra/env/.env, e.g. http://windows-pc.tailnet.ts.net:11434).
       # Falls back to host.docker.internal for single-machine setups.
       api_base: os.environ/OLLAMA_BASE_URL
+      # Ollama ignores many OpenAI params; drop rather than error.
+      drop_params: true
     model_info:
       mode: chat
       base_model: llama3.1
@@ -46,7 +50,6 @@ general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: null
   telemetry: false
-  drop_params: true
   # Hard budget cap: refuse requests once spend reaches this USD amount.
   # Prevents runaway API costs. Adjust or remove if you need more headroom.
   max_budget: 20
