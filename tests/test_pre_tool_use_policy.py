@@ -135,3 +135,12 @@ def test_unknown_tool_defaults_to_approval():
     payload = {"tool": "some_future_tool", "params": {}}
     decision, _ = evaluate(payload, REGISTRY)
     assert decision == "approval_required"
+
+
+def test_read_prefixed_write_action_is_not_treated_as_read():
+    # Regression: a bare prefix check let write actions with read-shaped
+    # names (get_or_create_project, fetchAndApply) bypass the approval gate.
+    assert classify_mcp_action("todoist", "get_or_create_project", REGISTRY) == "approval"
+    assert classify_mcp_action("todoist", "fetchAndApplyChanges", REGISTRY) == "approval"
+    # home_assistant_local is read_only, so a sneaky write must be denied
+    assert classify_mcp_action("home_assistant_local", "getOrSetState", REGISTRY) == "deny"

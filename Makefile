@@ -11,14 +11,18 @@ PIP    := $(if $(wildcard .venv/bin/pip),.venv/bin/pip,pip)
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-16s %s\n", $$1, $$2}'
 
+# --env-file is required: compose interpolates ${VARS} from the shell or
+# --env-file only, never from a service-level env_file.
+COMPOSE := docker compose --env-file $(ENV_FILE)
+
 up: $(ENV_FILE) ## Start all services (docker compose up -d)
-	docker compose -f infra/docker-compose.yml up -d
+	$(COMPOSE) -f infra/docker-compose.yml up -d
 
-down: ## Stop all services
-	docker compose -f infra/docker-compose.yml down
+down: $(ENV_FILE) ## Stop all services
+	$(COMPOSE) -f infra/docker-compose.yml down
 
-logs: ## Tail logs for all services
-	docker compose -f infra/docker-compose.yml logs -f
+logs: $(ENV_FILE) ## Tail logs for all services
+	$(COMPOSE) -f infra/docker-compose.yml logs -f
 
 db-init: ## Create SQLite DB and apply schema
 	@mkdir -p db
@@ -50,8 +54,10 @@ restore-db: ## Restore DB from a backup: make restore-db SNAP=backups/assistant-
 	scripts/restore-db.sh "$(SNAP)"
 
 logrotate-install: ## Install logrotate config for logs/ (run with sudo, edit USER first)
-	@echo "Edit infra/logrotate/assistant — replace REPLACE_USER with your username — then re-run."
-	@grep -q REPLACE_USER infra/logrotate/assistant && (echo "ERROR: REPLACE_USER not substituted"; exit 1) || true
+	@if grep -q REPLACE_USER infra/logrotate/assistant; then \
+		echo "ERROR: edit infra/logrotate/assistant first — replace REPLACE_USER with your username"; \
+		exit 1; \
+	fi
 	sudo cp infra/logrotate/assistant /etc/logrotate.d/assistant
 	sudo logrotate --debug /etc/logrotate.d/assistant
 

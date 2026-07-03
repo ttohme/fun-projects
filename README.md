@@ -80,8 +80,8 @@ units for the watcher, executor, OpenClaw, and a daily DB backup — see
 ## Typical Daily Workflow
 
 1. **Files land in `sync/inbox/`** → watcher POSTs to n8n → email/voice/file triage → jobs inserted into SQLite
-2. **Review pending approvals**: `make approve`
-3. **Execute approved jobs**: `make execute` (dispatches to Todoist or Home Assistant)
+2. **Review pending approvals**: `make approve` (gated jobs: high-risk intents, low confidence, all voice captures)
+3. **Execute runnable jobs**: `make execute` — runs human-approved jobs plus safe auto-proceed ones (dispatches to Todoist or Home Assistant)
 4. **Ad-hoc task capture**: `make capture DESC="Call dentist" PROJECT="Health"`
 
 ## Directory Map
@@ -146,6 +146,8 @@ npx promptfoo view
 ## Security Notes
 
 - OpenClaw is loopback-bound by default. Expose remotely only via Tailscale Serve or SSH tunnelling.
-- All write operations to Todoist, Home Assistant, and external services require human approval.
+- High-risk operations (outbound email, task deletion, Home Assistant writes), anything below the
+  confidence threshold, and all voice captures require human approval before execution. Confident,
+  low-risk task creation auto-proceeds.
 - Never store secrets in code. All credentials belong in `infra/env/.env` (gitignored).
 - For untrusted repos or dependency installs, use the OpenHands Docker sandbox.

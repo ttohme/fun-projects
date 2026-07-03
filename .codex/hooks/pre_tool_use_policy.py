@@ -61,7 +61,18 @@ def classify_mcp_action(server_name: str, action: str, registry: dict) -> str:
     if not server.get("enabled", True):
         return "deny"
 
-    is_read = bool(re.match(r"^(get|list|search|read|fetch|describe)", action, re.I))
+    # An action is read-only when it STARTS with a read verb AND contains no
+    # write-indicating token anywhere — a bare prefix check would let names
+    # like get_or_create_project or fetch_and_apply bypass the approval gate.
+    has_read_prefix = bool(
+        re.match(r"^(get|list|search|read|fetch|describe)($|_|[A-Z0-9])", action)
+        or re.match(r"^(get|list|search|read|fetch|describe)($|_)", action, re.I)
+    )
+    has_write_token = bool(re.search(
+        r"(create|update|delete|write|apply|set|send|remove|add|move|rename|execute|run|post|put|patch)",
+        action, re.I,
+    ))
+    is_read = has_read_prefix and not has_write_token
     if is_read:
         policy = server.get("read_policy", global_policies.get("default_read_policy", "allow"))
     else:

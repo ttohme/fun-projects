@@ -1,15 +1,15 @@
 # Logrotate config for the assistant's native log files.
-# Install: sudo cp infra/logrotate/assistant /etc/logrotate.d/assistant
+# Edit first: replace REPLACE_USER with your username (logrotate has NO
+# variable substitution — paths must be literal).
+# Install: make logrotate-install   (refuses to install while REPLACE_USER remains)
 # Test:    sudo logrotate --debug /etc/logrotate.d/assistant
 #
 # Rotates logs/tool_use.jsonl (Codex audit log) and any *.log files in logs/.
 # The watcher and executor log to stdout → systemd journal, so no rotation
 # needed there (journald handles it via SystemMaxUse in /etc/systemd/journald.conf).
 
-REPO_LOGS=/home/REPLACE_USER/fun-projects/logs
-
-$REPO_LOGS/tool_use.jsonl
-$REPO_LOGS/*.log
+/home/REPLACE_USER/fun-projects/logs/tool_use.jsonl
+/home/REPLACE_USER/fun-projects/logs/*.log
 {
     daily
     rotate 30

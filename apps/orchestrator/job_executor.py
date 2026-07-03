@@ -2,9 +2,11 @@
 apps/orchestrator/job_executor.py
 Dispatches approved jobs to their target systems.
 
-Polls the DB for jobs with status='approved' and routes each one to the
-correct handler based on intent. Updates job status to 'done' or 'error'
-after each attempt.
+Polls the DB for runnable jobs and routes each one to the correct handler
+based on intent, updating job status to 'done' or 'error' after each attempt.
+Runnable means status='approved' (human-approved via approval_service) or
+status='pending' with approval_required=0 (auto-proceed). High-risk intents
+never auto-proceed: they are re-flagged for approval instead.
 
 Intent routing:
     create_task / update_task / document_triage  → todoist_client
@@ -32,7 +34,7 @@ import sys
 import time
 from pathlib import Path
 
-from db import get_pending_jobs, open_db, update_job_status
+from db import get_pending_jobs, insert_approval, open_db, update_job_status
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB_PATH = Path(os.environ.get("DB_PATH", str(REPO_ROOT / "db" / "assistant.db")))
@@ -49,12 +51,24 @@ logger = logging.getLogger("job-executor")
 TODOIST_INTENTS = {"create_task", "update_task", "document_triage"}
 HASS_WRITE_INTENTS = {"home_control_write"}
 HASS_READ_INTENTS = {"home_control_read"}
-UNIMPLEMENTED_INTENTS = {"send_email", "code_job"}
+UNIMPLEMENTED_INTENTS = {"send_email", "code_job", "delete_task"}
+
+# AGENTS.md: these must never run without an approval decision, so they are
+# excluded from auto-proceed even if a row was inserted with approval_required=0.
+HIGH_RISK_INTENTS = {"delete_task", "home_control_write", "send_email"}
 
 
 def _get_approved_jobs(conn) -> list:
     return conn.execute(
         "SELECT * FROM jobs WHERE status = 'approved' ORDER BY updated_at"
+    ).fetchall()
+
+
+def _get_auto_proceed_jobs(conn) -> list:
+    """Pending jobs flagged auto-proceed (approval_required=0, see db/schema.sql)."""
+    return conn.execute(
+        "SELECT * FROM jobs WHERE status = 'pending' AND approval_required = 0"
+        " ORDER BY created_at"
     ).fetchall()
 
 
@@ -127,10 +141,40 @@ def _execute_hass_read(payload: dict) -> dict:
 
 
 def run_once(conn, *, dry_run: bool = False) -> list[dict]:
-    """Execute all currently approved jobs. Returns list of result dicts."""
-    jobs = _get_approved_jobs(conn)
+    """
+    Execute all runnable jobs: human-approved ones plus pending auto-proceed
+    ones (approval_required=0). High-risk intents never auto-proceed — if one
+    slipped through with approval_required=0, it is re-flagged for approval
+    instead of executed.
+    """
+    jobs = list(_get_approved_jobs(conn))
+
+    for job in _get_auto_proceed_jobs(conn):
+        if (job["intent"] or "unknown") in HIGH_RISK_INTENTS:
+            logger.warning(
+                f'"Job {job["id"]} intent={job["intent"]} is high-risk but was '
+                f'flagged auto-proceed — re-flagging for approval"'
+            )
+            if not dry_run:
+                conn.execute(
+                    "UPDATE jobs SET approval_required = 1 WHERE id = ?",
+                    (job["id"],),
+                )
+                conn.commit()
+                payload = json.loads(job["payload_json"])
+                insert_approval(
+                    conn,
+                    job_id=job["id"],
+                    requested_action=(
+                        f"High-risk intent {job['intent']!r}: "
+                        f"{payload.get('title', '(no title)')}"
+                    ),
+                )
+            continue
+        jobs.append(job)
+
     if not jobs:
-        logger.info('"No approved jobs to execute"')
+        logger.info('"No runnable jobs"')
         return []
     results = [execute_job(conn, job, dry_run=dry_run) for job in jobs]
     logger.info(f'"Processed {len(results)} job(s)"')

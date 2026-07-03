@@ -150,3 +150,24 @@ def test_triage_invalid_schema_raises(tmp_path):
             assert False, "Should have raised ValidationError"
         except (ValidationError, Exception) as e:
             assert "invalid" in str(e).lower() or "missing" in str(e).lower()
+
+
+def test_triage_home_control_task_with_hass_fields_validates(tmp_path):
+    # Regression: hass_* fields were missing from the schema, so any
+    # home-control task carrying the fields the executor needs was rejected
+    # at intake by additionalProperties: false.
+    task = {
+        "title": "Turn on kitchen light",
+        "intent": "home_control_write",
+        "source_type": "chat",
+        "approval_required": True,
+        "confidence": 0.9,
+        "hass_domain": "light",
+        "hass_service": "turn_on",
+        "hass_service_data": {"entity_id": "light.kitchen"},
+    }
+    with _mock_call_litellm(task):
+        result = triage(input_content="turn on the kitchen light",
+                        source_type="chat", source_ref="chat-001", dry_run=True)
+    assert result["hass_domain"] == "light"
+    assert result["approval_required"] is True

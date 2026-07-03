@@ -33,6 +33,8 @@ backups/
 logs/
 *.log
 *.jsonl
+# Eval regression cases are versioned (AGENTS.md requires adding them)
+!evals/cases/*.jsonl
 
 # ── macOS ──────────────────────────────────────────────────────────────────────
 .DS_Store

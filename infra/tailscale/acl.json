@@ -16,12 +16,13 @@
 
   "acls": [
     // ── Your own devices reach the human-facing dashboards ──────────────────
+    // Note: OpenClaw (18789) is intentionally absent — it binds 127.0.0.1 only
+    // (see openclaw/openclaw.json). Reach it via SSH tunnel or `tailscale serve`.
     {
       "action": "accept",
       "src": ["autogroup:member"],
       "dst": [
         "tag:brain:5678",    // n8n UI
-        "tag:brain:18789",   // OpenClaw gateway
         "tag:monitor:3000",  // Langfuse trace explorer
         "tag:monitor:3001",  // Uptime Kuma dashboard
         "tag:muscle:3333"    // OpenHands sandbox UI
@@ -50,13 +51,14 @@
     },
 
     // ── Pi 4 (monitor) → everything it watches via Uptime Kuma ──────────────
+    // OpenClaw (18789) is loopback-only and can't be probed over the tailnet;
+    // monitor it on the Pi 5 itself (scripts/healthcheck.sh or a Kuma push).
     {
       "action": "accept",
       "src": ["tag:monitor"],
       "dst": [
         "tag:brain:5678",
         "tag:brain:4000",
-        "tag:brain:18789",
         "tag:muscle:11434",
         "tag:muscle:3333"
       ]

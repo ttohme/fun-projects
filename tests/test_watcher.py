@@ -183,3 +183,29 @@ def test_on_moved_tmp_dest_is_skipped(tmp_path):
     with patch.object(handler, "_post_to_n8n") as mock_post:
         handler.on_moved(event)
         mock_post.assert_not_called()
+
+
+# ── Startup catch-up scan ─────────────────────────────────────────────────────
+
+def test_scan_existing_posts_eligible_files_only(tmp_path):
+    # Regression: files that arrived while the watcher was down were never
+    # triaged — scan_existing() posts them on startup.
+    (tmp_path / "invoice.pdf").touch()
+    (tmp_path / "notes.txt").touch()
+    (tmp_path / ".hidden").touch()
+    (tmp_path / "partial.tmp").touch()
+    (tmp_path / "subdir").mkdir()
+    handler = w.InboxHandler()
+    with patch.object(handler, "_post_to_n8n") as mock_post:
+        posted = w.scan_existing(handler, tmp_path)
+    assert posted == 2
+    posted_names = {Path(c.args[0]).name for c in mock_post.call_args_list}
+    assert posted_names == {"invoice.pdf", "notes.txt"}
+
+
+def test_scan_existing_empty_dir_posts_nothing(tmp_path):
+    handler = w.InboxHandler()
+    with patch.object(handler, "_post_to_n8n") as mock_post:
+        posted = w.scan_existing(handler, tmp_path)
+    assert posted == 0
+    mock_post.assert_not_called()

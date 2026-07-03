@@ -59,3 +59,21 @@ tests:
         value: |
           const obj = JSON.parse(output);
           return obj.intent === 'send_email';
+
+  - description: "Home-control write emits hass_* fields and requires approval"
+    vars:
+      input_content: |
+        Turn on the kitchen light.
+      source_type: chat
+      source_ref: "chat-kitchen-light-001"
+    assert:
+      - type: is-json
+      - type: javascript
+        value: |
+          const obj = JSON.parse(output);
+          return obj.intent === 'home_control_write' && obj.approval_required === true;
+      - type: javascript
+        value: |
+          const obj = JSON.parse(output);
+          return obj.hass_domain === 'light' && obj.hass_service === 'turn_on'
+            && obj.hass_service_data && typeof obj.hass_service_data.entity_id === 'string';

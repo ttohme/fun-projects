@@ -73,6 +73,22 @@
     "dedupe_key": {
       "type": "string",
       "description": "SHA256 of source_ref + '|' + title for deduplication."
+    },
+    "hass_entity_id": {
+      "type": "string",
+      "description": "Home Assistant entity to read (home_control_read), e.g. 'light.kitchen'."
+    },
+    "hass_domain": {
+      "type": "string",
+      "description": "Home Assistant service domain (home_control_write), e.g. 'light'."
+    },
+    "hass_service": {
+      "type": "string",
+      "description": "Home Assistant service name (home_control_write), e.g. 'turn_on'."
+    },
+    "hass_service_data": {
+      "type": "object",
+      "description": "Service call payload (home_control_write), e.g. {\"entity_id\": \"light.kitchen\"}."
     }
   }
 }

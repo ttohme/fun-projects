@@ -31,6 +31,11 @@ Source reference: {{source_ref}}
    set `labels: ["private"]` — this routes to the local model in later steps.
 6. Never invent information not present in the source content.
 7. `dedupe_key` must be the SHA256 hex of `(source_ref + "|" + title)`.
+8. For `home_control_read`, also set `hass_entity_id` (e.g. `"light.kitchen"`).
+   For `home_control_write`, also set `hass_domain`, `hass_service`, and
+   `hass_service_data` (e.g. `"light"`, `"turn_on"`,
+   `{"entity_id": "light.kitchen"}`). Only reference entities explicitly
+   named in the source content.
 
 ## Output
 Return a single JSON object conforming to task-object.schema.json.

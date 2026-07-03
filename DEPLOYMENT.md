@@ -66,7 +66,10 @@ see [`infra/syncthing/README.md`](infra/syncthing/README.md).
 ### 2. Pi 4 — the monitor
 ```bash
 cp infra/env/.env.example infra/env/.env   # fill in secrets + tailnet hostnames
-docker compose -f infra/docker-compose.pi4.yml up -d
+chmod 600 infra/env/.env
+# --env-file is required: compose only interpolates ${VARS} from the shell
+# or --env-file, never from a service-level env_file.
+docker compose --env-file infra/env/.env -f infra/docker-compose.pi4.yml up -d
 # Langfuse → http://pi4.tailnet.ts.net:3000   (create project, copy the keys)
 # Uptime Kuma → http://pi4.tailnet.ts.net:3001 (add monitors for the ports below)
 ```
@@ -76,15 +79,16 @@ docker compose -f infra/docker-compose.pi4.yml up -d
 # Ollama natively (gets GPU): https://ollama.com/download
 ollama serve
 ollama pull llama3.1
-# OpenHands in Docker Desktop:
-docker compose -f infra/docker-compose.windows.yml up -d
+# OpenHands in Docker Desktop (--env-file required, see Pi 4 note):
+docker compose --env-file infra/env/.env -f infra/docker-compose.windows.yml up -d
 ```
 
 ### 4. Pi 5 — the brain
 ```bash
 cp infra/env/.env.example infra/env/.env   # same secrets; tailnet hostnames for Pi4 + Windows
+chmod 600 infra/env/.env
 scripts/bootstrap.sh                       # venv, deps, DB, dirs (idempotent)
-docker compose -f infra/docker-compose.pi5.yml up -d
+docker compose --env-file infra/env/.env -f infra/docker-compose.pi5.yml up -d
 
 # Reboot-survivable native services (watcher, executor, OpenClaw, daily backup):
 sudo INSTALL_OPENCLAW=1 scripts/install-services.sh
@@ -104,7 +108,7 @@ Open `http://pi5.tailnet.ts.net:5678`, import the stubs from
 |---|---|---|
 | `pi5.tailnet:5678` | n8n | Configure / monitor workflows |
 | `pi5.tailnet:4000` | LiteLLM | Model proxy (internal) |
-| `pi5.tailnet:18789` | OpenClaw | Agent gateway |
+| `localhost:18789` (Pi 5 only) | OpenClaw | Agent gateway — loopback-bound; reach via SSH tunnel or `tailscale serve` |
 | `pi4.tailnet:3000` | Langfuse | Trace explorer |
 | `pi4.tailnet:3001` | Uptime Kuma | Health dashboard |
 | `win.tailnet:3333` | OpenHands | Coding sandbox |
@@ -153,9 +157,9 @@ sudo ufw status verbose
 ## Single-machine fallback
 
 To run everything on one box (e.g. just the Pi 5), use the combined
-`infra/docker-compose.yml` instead of the split files and leave the
-`OLLAMA_BASE_URL` / `LANGFUSE_HOST` defaults (`host.docker.internal` /
-`langfuse:3000`) as-is.
+`infra/docker-compose.yml` (`make up` passes `--env-file` for you) instead of
+the split files and leave the `OLLAMA_BASE_URL` / `LANGFUSE_HOST` defaults
+(`host.docker.internal` / `langfuse:3000`) as-is.
 
 ## Data flow recap
 

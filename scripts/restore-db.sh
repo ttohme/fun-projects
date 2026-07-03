@@ -44,6 +44,16 @@ if [ "$py_exit" -ne 0 ]; then
   exit 1
 fi
 
+# Refuse to restore under a live writer: a concurrent executor/watcher would
+# produce a torn safety copy, and its WAL would replay stale pages over the
+# freshly restored file on next open.
+if [ -f "${DB_PATH}-wal" ] && [ -s "${DB_PATH}-wal" ]; then
+  echo "restore-db: ${DB_PATH}-wal is non-empty — a writer may be active." >&2
+  echo "restore-db: stop the services first:" >&2
+  echo "  sudo systemctl stop assistant-executor assistant-watcher" >&2
+  exit 1
+fi
+
 # Swap: make a safety copy of the current live DB first.
 if [ -f "$DB_PATH" ]; then
   safety="${DB_PATH}.pre-restore.$(date -u +%Y%m%dT%H%M%SZ)"
@@ -52,4 +62,6 @@ if [ -f "$DB_PATH" ]; then
 fi
 
 cp "$TMP" "$DB_PATH"
+# Drop WAL/SHM sidecars so a stale WAL can't be replayed over the restore.
+rm -f "${DB_PATH}-wal" "${DB_PATH}-shm"
 echo "restore-db: restored $DB_PATH from $SNAPSHOT"

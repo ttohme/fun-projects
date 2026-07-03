@@ -89,13 +89,26 @@ def test_process_file_moves_to_processed(tmp_path):
 
 
 def test_process_file_low_confidence_skipped(tmp_path):
+    from document_processor import DISCARD_THRESHOLD
     f = tmp_path / "note.txt"
     f.write_text("something vague")
-    low_conf_task = {**GOOD_TASK, "confidence": CONFIDENCE_THRESHOLD - 0.01}
+    low_conf_task = {**GOOD_TASK, "confidence": DISCARD_THRESHOLD - 0.01}
     with _mock_agent([low_conf_task]):
         results = process_file(f, dry_run=True)
     assert results[0].get("_skipped") == "low_confidence"
     assert "_job_id" not in results[0]
+
+
+def test_process_file_mid_confidence_kept_but_gated(tmp_path):
+    # Regression: 0.5–0.7 tasks were dropped; the document-triage-agent rule
+    # says only <0.5 is discarded — mid-confidence is kept and approval-gated.
+    f = tmp_path / "note.txt"
+    f.write_text("probably pay the water bill")
+    mid_conf_task = {**GOOD_TASK, "confidence": 0.6, "approval_required": False}
+    with _mock_agent([mid_conf_task]):
+        results = process_file(f, dry_run=True)
+    assert results[0].get("_skipped") is None
+    assert results[0]["approval_required"] is True
 
 
 def test_process_file_multiple_tasks(tmp_path):

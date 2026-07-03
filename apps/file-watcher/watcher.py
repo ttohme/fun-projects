@@ -103,6 +103,22 @@ class InboxHandler(FileSystemEventHandler):
         logger.error(f'"Failed to post {path.name} after {retries} attempts"')
 
 
+def scan_existing(handler: InboxHandler, watch_dir: Path) -> int:
+    """
+    Post any files already sitting in the inbox — they arrived while the
+    watcher was down (reboot, crash) and would otherwise never be triaged.
+    Downstream dedupe_key handling makes re-posting a file harmless.
+    """
+    posted = 0
+    for path in sorted(watch_dir.iterdir()):
+        if path.is_dir() or handler._should_skip(path):
+            continue
+        logger.info(f'"Found pre-existing file on startup: {path.name}"')
+        handler._post_to_n8n(path)
+        posted += 1
+    return posted
+
+
 def main():
     if not WATCH_DIR.is_dir():
         logger.error(f'"Watch directory does not exist: {WATCH_DIR}"')
@@ -113,6 +129,9 @@ def main():
     observer.schedule(handler, str(WATCH_DIR), recursive=False)
     observer.start()
     logger.info(f'"Watching {WATCH_DIR} for new files"')
+
+    # Catch up on anything that landed while we were down.
+    scan_existing(handler, WATCH_DIR)
 
     try:
         while True:

@@ -3,11 +3,13 @@
 # Langfuse and Uptime Kuma live on the Pi 4 (see docker-compose.pi4.yml).
 # Ollama and OpenHands live on the Windows PC.
 #
-#   docker compose -f infra/docker-compose.pi5.yml up -d
+# Run from the repo root WITH the env file flag — compose only interpolates
+# ${VARS} from the shell or --env-file, never from a service's env_file:
+#
+#   docker compose --env-file infra/env/.env -f infra/docker-compose.pi5.yml up -d
 #
 # Reaches the Pi 4's Langfuse and the Windows Ollama over the tailnet via
 # LANGFUSE_HOST and OLLAMA_BASE_URL in infra/env/.env.
-version: "3.9"
 
 networks:
   ai-net:
@@ -35,7 +37,14 @@ services:
   litellm:
     image: ghcr.io/berriai/litellm:${LITELLM_IMAGE_TAG:-main-stable}
     restart: unless-stopped
-    env_file: ./env/.env
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_HOST: ${LANGFUSE_HOST}
     command: ["--config", "/app/litellm.yaml", "--port", "4000"]
     # Lets the container resolve host.docker.internal for single-machine
     # fallback; tailnet hostnames resolve normally.
@@ -47,7 +56,8 @@ services:
       - ./litellm.yaml:/app/litellm.yaml:ro
     networks: [ai-net]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/health/liveliness"]
+      # The litellm image has no curl/wget; python3 is always present.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness', timeout=3)"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -55,12 +65,10 @@ services:
   n8n:
     image: n8nio/n8n:1
     restart: unless-stopped
-    env_file: ./env/.env
     environment:
+      # n8n 1.x uses built-in user management; the old basic-auth env vars
+      # were removed in 1.0 and are silently ignored — do not add them back.
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
-      N8N_BASIC_AUTH_ACTIVE: "true"
-      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
-      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
       N8N_LOG_LEVEL: info
       WEBHOOK_URL: ${N8N_WEBHOOK_BASE_URL}
       GENERIC_TIMEZONE: "UTC"

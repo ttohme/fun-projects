@@ -41,6 +41,10 @@ DB_PATH = Path(os.environ.get("DB_PATH", str(REPO_ROOT / "db" / "assistant.db"))
 SUPPORTED_TEXT_SUFFIXES = {".txt", ".md", ".csv", ".json", ".xml", ".html"}
 SUPPORTED_DOC_SUFFIXES = {".pdf"}  # future: use pdfminer or pymupdf
 
+# document-triage-agent rule: discard below 0.5. Tasks between this and
+# CONFIDENCE_THRESHOLD (0.7) are kept but gated by should_require_approval.
+DISCARD_THRESHOLD = 0.5
+
 
 def read_file_text(path: Path) -> str:
     """Extract text from supported file types. Returns empty string on failure."""
@@ -125,7 +129,7 @@ def process_file(
             # Copy so we never mutate the list returned by the model call
             task = dict(raw_task)
             # Drop low-confidence tasks as per document-triage-agent rules
-            if task.get("confidence", 1.0) < CONFIDENCE_THRESHOLD:
+            if task.get("confidence", 1.0) < DISCARD_THRESHOLD:
                 task["_skipped"] = "low_confidence"
                 results.append(task)
                 continue

@@ -68,6 +68,77 @@ def test_run_once_processes_all_approved():
     assert all(r["status"] == "done" for r in results)
 
 
+def _pending_auto_job(conn, intent="create_task", source_ref="auto-001"):
+    """Insert a pending job with approval_required=0 (auto-proceed)."""
+    payload = {
+        "title": "Auto task",
+        "intent": intent,
+        "source_type": "email",
+        "approval_required": False,
+        "confidence": 0.95,
+    }
+    job_id = insert_job(conn, source_type="email", source_ref=source_ref,
+                        payload=payload, intent=intent, approval_required=False)
+    return conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+
+
+def test_run_once_executes_pending_auto_proceed_job():
+    # Regression: approval_required=0 jobs were stranded at 'pending' forever.
+    conn = fresh_db()
+    job = _pending_auto_job(conn)
+    with patch("job_executor._dispatch", return_value={"ok": True}):
+        results = run_once(conn)
+    assert len(results) == 1
+    assert results[0]["status"] == "done"
+    row = conn.execute("SELECT status FROM jobs WHERE id=?", (job["id"],)).fetchone()
+    assert row["status"] == "done"
+
+
+def test_run_once_does_not_execute_pending_gated_job():
+    conn = fresh_db()
+    payload = {"title": "Gated", "intent": "create_task", "source_type": "email",
+               "approval_required": True, "confidence": 0.5}
+    job_id = insert_job(conn, source_type="email", source_ref="gated-001",
+                        payload=payload, intent="create_task", approval_required=True)
+    with patch("job_executor._dispatch", return_value={"ok": True}) as mock:
+        results = run_once(conn)
+    assert results == []
+    mock.assert_not_called()
+    row = conn.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
+    assert row["status"] == "pending"
+
+
+def test_run_once_reflags_high_risk_auto_proceed_job():
+    # Defense in depth: high-risk intents never auto-proceed even if the row
+    # was inserted with approval_required=0.
+    conn = fresh_db()
+    job = _pending_auto_job(conn, intent="home_control_write", source_ref="risky-001")
+    with patch("job_executor._dispatch", return_value={"ok": True}) as mock:
+        results = run_once(conn)
+    assert results == []
+    mock.assert_not_called()
+    row = conn.execute("SELECT status, approval_required FROM jobs WHERE id=?",
+                       (job["id"],)).fetchone()
+    assert row["status"] == "pending"
+    assert row["approval_required"] == 1
+    approval = conn.execute("SELECT * FROM approvals WHERE job_id=?",
+                            (job["id"],)).fetchone()
+    assert approval is not None
+    assert approval["decision"] is None
+
+
+def test_run_once_dry_run_leaves_high_risk_auto_proceed_untouched():
+    conn = fresh_db()
+    job = _pending_auto_job(conn, intent="send_email", source_ref="risky-002")
+    results = run_once(conn, dry_run=True)
+    assert results == []
+    row = conn.execute("SELECT approval_required FROM jobs WHERE id=?",
+                       (job["id"],)).fetchone()
+    assert row["approval_required"] == 0  # unchanged in dry-run
+    assert conn.execute("SELECT COUNT(*) c FROM approvals WHERE job_id=?",
+                        (job["id"],)).fetchone()["c"] == 0
+
+
 # ── execute_job ───────────────────────────────────────────────────────────────
 
 def test_execute_job_marks_done_on_success():

@@ -40,6 +40,7 @@ if [ ! -f infra/env/.env ]; then
 else
   echo "    infra/env/.env already exists"
 fi
+chmod 600 infra/env/.env  # holds every credential — never world-readable
 
 echo "==> Sanity check"
 python3 -m pytest tests/ -q
@@ -47,5 +48,7 @@ python3 -m pytest tests/ -q
 echo
 echo "Bootstrap complete. Next:"
 echo "  1. Edit infra/env/.env with your secrets and tailnet hostnames"
-echo "  2. make up                  (Docker services for this machine's role)"
+echo "  2. Start Docker services for this machine's role (see DEPLOYMENT.md):"
+echo "       docker compose --env-file infra/env/.env -f infra/docker-compose.<role>.yml up -d"
+echo "     (single machine: make up)"
 echo "  3. sudo scripts/install-services.sh   (reboot-survivable native services)"
