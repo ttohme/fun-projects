@@ -64,11 +64,14 @@ logger = logging.getLogger("job-executor")
 TODOIST_INTENTS = {"create_task", "update_task", "document_triage"}
 HASS_WRITE_INTENTS = {"home_control_write"}
 HASS_READ_INTENTS = {"home_control_read"}
+PROMPT_INTENTS = {"prompt_revision"}
 UNIMPLEMENTED_INTENTS = {"send_email", "code_job", "delete_task"}
 
 # AGENTS.md: these must never run without an approval decision, so they are
 # excluded from auto-proceed even if a row was inserted with approval_required=0.
-HIGH_RISK_INTENTS = {"delete_task", "home_control_write", "send_email"}
+# prompt_revision changes system behavior — a human always signs off.
+HIGH_RISK_INTENTS = {"delete_task", "home_control_write", "send_email",
+                     "prompt_revision"}
 
 
 def _get_approved_jobs(conn) -> list:
@@ -165,6 +168,8 @@ def _dispatch(intent: str, payload: dict) -> dict:
         return _execute_hass_write(payload)
     if intent in HASS_READ_INTENTS:
         return _execute_hass_read(payload)
+    if intent in PROMPT_INTENTS:
+        return _execute_prompt_revision(payload)
     if intent in UNIMPLEMENTED_INTENTS:
         raise NotImplementedError(
             f"Intent '{intent}' is not yet automated — handle manually or via n8n"
@@ -176,6 +181,37 @@ def _execute_todoist(payload: dict) -> dict:
     from todoist_client import execute_approved_job
     created = execute_approved_job(payload)
     return {"todoist_task_id": created.get("id"), "title": created.get("content")}
+
+
+def _execute_prompt_revision(payload: dict) -> dict:
+    """
+    Promote an approved candidate prompt over the live one. Deterministic file
+    copy, no LLM. Both paths must resolve inside apps/orchestrator/prompts/ —
+    a payload pointing anywhere else is rejected.
+    """
+    import shutil
+    from datetime import datetime, timezone
+
+    prompts_root = (REPO_ROOT / "apps" / "orchestrator" / "prompts").resolve()
+    candidate = (REPO_ROOT / payload.get("candidate_path", "")).resolve()
+    target = (REPO_ROOT / payload.get("target_path", "")).resolve()
+
+    for p, name in ((candidate, "candidate_path"), (target, "target_path")):
+        if not str(p).startswith(str(prompts_root)):
+            raise ValueError(f"{name} escapes the prompts directory: {p}")
+    if not candidate.is_file():
+        raise ValueError(f"candidate prompt missing: {candidate}")
+
+    archive_dir = prompts_root / "archive"
+    archive_dir.mkdir(exist_ok=True)
+    archived = ""
+    if target.is_file():
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        archived = str(archive_dir / f"{target.stem}.{stamp}{target.suffix}")
+        shutil.copy2(target, archived)
+    shutil.copy2(candidate, target)
+    return {"promoted": str(candidate), "target": str(target),
+            "archived_previous": archived}
 
 
 def _execute_hass_write(payload: dict) -> dict:

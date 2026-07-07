@@ -1,0 +1,28 @@
+# Continuous-improvement eval: current prompts vs candidates on the full case
+# set (inline cases + mined regression cases from your approval decisions).
+# Used by scripts/improvement_run.sh — `make evals` keeps using promptfooconfig.yaml.
+description: "Prompt improvement — current vs candidates"
+
+providers:
+  # Prefer the free local models; the run script only evals when a model is
+  # reachable. Swap in openai:gpt-4o-mini for a cloud judge if preferred.
+  - id: ollama:chat:hermes3:8b
+    label: local-hermes
+    config:
+      temperature: 0.1
+  - id: ollama:llama3.1
+    label: local-llama
+    config:
+      temperature: 0.1
+
+prompts:
+  - file://apps/orchestrator/prompts/triage-agent.md
+  - file://apps/orchestrator/prompts/candidates/*.md
+
+defaultTest:
+  vars:
+    source_type: email
+    source_ref: "improve-ref-001"
+
+tests:
+  - file://evals/cases/mined/*.yaml

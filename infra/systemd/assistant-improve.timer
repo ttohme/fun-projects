@@ -1,0 +1,9 @@
+[Unit]
+Description=AI Assistant — improvement pipeline nightly at 02:30 (before the 03:30 backup)
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

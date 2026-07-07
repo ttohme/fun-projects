@@ -1,7 +1,7 @@
 .PHONY: up down logs db-init watcher evals validate test approve execute capture \
         bootstrap backup restore-db healthcheck install-services uninstall-services \
         logrotate-install dead-letters hass-cache ledger-sync nudges briefing \
-        calendar-ingest gpu-work wake-gpu help
+        calendar-ingest gpu-work wake-gpu improve help
 
 ENV_FILE := infra/env/.env
 
@@ -60,6 +60,9 @@ gpu-work: db-init ## Process awaiting_gpu media jobs once (transcribe/OCR/summar
 
 wake-gpu: ## Send a Wake-on-LAN packet to the Windows GPU box (GPU_MAC in .env)
 	scripts/wake-gpu.sh
+
+improve: db-init ## Run the continuous-improvement pipeline once (mine, eval, report)
+	scripts/improvement_run.sh
 
 execute: db-init ## Run job executor once (--dry-run to preview, --watch to poll)
 	$(PYTHON) apps/orchestrator/job_executor.py $(ARGS)

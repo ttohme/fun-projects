@@ -29,6 +29,9 @@ infra/volumes/
 # ── DB backups ─────────────────────────────────────────────────────────────────
 backups/
 
+# ── Improvement pipeline scratch (reports, eval outputs) ────────────────────────
+var/
+
 # ── Logs ───────────────────────────────────────────────────────────────────────
 logs/
 *.log
