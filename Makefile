@@ -1,6 +1,6 @@
 .PHONY: up down logs db-init watcher evals validate test approve execute capture \
         bootstrap backup restore-db healthcheck install-services uninstall-services \
-        logrotate-install help
+        logrotate-install dead-letters hass-cache help
 
 ENV_FILE := infra/env/.env
 
@@ -35,6 +35,12 @@ watcher: ## Run the file watcher (requires N8N_WEBHOOK_URL env var)
 
 approve: db-init ## Interactively review pending approvals
 	$(PYTHON) apps/orchestrator/approval_service.py review
+
+dead-letters: db-init ## List jobs that exhausted their retries
+	$(PYTHON) apps/orchestrator/approval_service.py dead-letters
+
+hass-cache: db-init ## Refresh the Home Assistant entity cache (requires HASS_URL/HASS_TOKEN)
+	PYTHONPATH=apps/orchestrator $(PYTHON) apps/orchestrator/hass_registry.py refresh
 
 execute: db-init ## Run job executor once (--dry-run to preview, --watch to poll)
 	$(PYTHON) apps/orchestrator/job_executor.py $(ARGS)

@@ -18,8 +18,29 @@ networks:
 volumes:
   n8n_data:
   redis_data:
+  ntfy_data:
 
 services:
+
+  ntfy:
+    # Self-hosted push notifications to the phone (free open-source client).
+    # Topic name acts as the shared secret — pick a random NTFY_TOPIC and keep
+    # the port tailnet-only (infra/tailscale/acl.json).
+    image: binwiederhier/ntfy:v2.11.0
+    restart: unless-stopped
+    command: serve --cache-file /var/cache/ntfy/cache.db
+    environment:
+      NTFY_BEHIND_PROXY: "false"
+    ports:
+      - "8090:80"
+    volumes:
+      - ntfy_data:/var/cache/ntfy
+    networks: [ai-net]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/v1/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7.4-alpine

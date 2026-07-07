@@ -3,6 +3,11 @@ Description=AI Assistant — inbox file watcher
 Documentation=https://github.com/ttohme/fun-projects
 After=network-online.target
 Wants=network-online.target
+# Crash-loop detection: >5 restarts in 10 min → unit enters failed state
+# and the alert unit pushes a phone notification via ntfy.
+StartLimitIntervalSec=600
+StartLimitBurst=5
+OnFailure=assistant-alert@%n.service
 
 [Service]
 Type=simple
@@ -10,7 +15,7 @@ User=__USER__
 WorkingDirectory=__REPO__
 EnvironmentFile=__REPO__/infra/env/.env
 ExecStart=__REPO__/.venv/bin/python apps/file-watcher/watcher.py
-Restart=on-failure
+Restart=always
 RestartSec=5
 # Hardening
 NoNewPrivileges=true

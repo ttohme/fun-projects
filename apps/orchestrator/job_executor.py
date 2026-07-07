@@ -34,11 +34,24 @@ import sys
 import time
 from pathlib import Path
 
-from db import get_pending_jobs, insert_approval, open_db, update_job_status
+from db import (
+    _now,
+    get_pending_jobs,
+    insert_approval,
+    open_db,
+    schedule_job_retry,
+    update_job_status,
+)
+from hass_registry import UnknownEntityError
+from notifier import notify
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DB_PATH = Path(os.environ.get("DB_PATH", str(REPO_ROOT / "db" / "assistant.db")))
 POLL_INTERVAL = int(os.environ.get("EXECUTOR_POLL_INTERVAL", "30"))
+
+# Transient-failure retry ladder: wait this long after attempt N (then dead-letter).
+RETRY_BACKOFF_SECONDS = [60, 300, 1800]
+MAX_ATTEMPTS = len(RETRY_BACKOFF_SECONDS)
 
 logging.basicConfig(
     stream=sys.stdout,
@@ -59,8 +72,12 @@ HIGH_RISK_INTENTS = {"delete_task", "home_control_write", "send_email"}
 
 
 def _get_approved_jobs(conn) -> list:
+    # next_retry_at is ISO-8601 UTC, so string comparison is chronological.
     return conn.execute(
-        "SELECT * FROM jobs WHERE status = 'approved' ORDER BY updated_at"
+        "SELECT * FROM jobs WHERE status = 'approved'"
+        " AND (next_retry_at IS NULL OR next_retry_at <= ?)"
+        " ORDER BY updated_at",
+        (_now(),),
     ).fetchall()
 
 
@@ -68,14 +85,26 @@ def _get_auto_proceed_jobs(conn) -> list:
     """Pending jobs flagged auto-proceed (approval_required=0, see db/schema.sql)."""
     return conn.execute(
         "SELECT * FROM jobs WHERE status = 'pending' AND approval_required = 0"
-        " ORDER BY created_at"
+        " AND (next_retry_at IS NULL OR next_retry_at <= ?)"
+        " ORDER BY created_at",
+        (_now(),),
     ).fetchall()
+
+
+def _next_retry_time(attempts: int) -> str:
+    """ISO timestamp when a job that just failed its Nth attempt may run again."""
+    from datetime import datetime, timedelta, timezone
+    delay = RETRY_BACKOFF_SECONDS[min(attempts, MAX_ATTEMPTS) - 1]
+    when = datetime.now(timezone.utc) + timedelta(seconds=delay)
+    return when.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 def execute_job(conn, job, *, dry_run: bool = False) -> dict:
     """
-    Execute a single approved job. Returns a result dict with status and detail.
-    Updates the job row to 'done' or 'error'.
+    Execute a single runnable job. Returns a result dict with status and detail.
+    Success → 'done'. Unimplemented intent → 'error' (no retry). Transient
+    failure → attempts+1 with backoff (job stays runnable, gated by
+    next_retry_at) until MAX_ATTEMPTS, then 'dead_letter' + ntfy alert.
     """
     job_id = job["id"]
     intent = job["intent"] or "unknown"
@@ -87,19 +116,46 @@ def execute_job(conn, job, *, dry_run: bool = False) -> dict:
         return {"status": "dry_run", "job_id": job_id, "intent": intent}
 
     try:
+        if intent in HASS_WRITE_INTENTS or intent in HASS_READ_INTENTS:
+            # Last gate before the HA API: the entity must actually exist.
+            from hass_registry import validate_home_control_payload
+            validate_home_control_payload(conn, payload)
         result = _dispatch(intent, payload)
         update_job_status(conn, job_id, "done", result=result)
         logger.info(f'"Job {job_id} done"')
         return {"status": "done", "job_id": job_id, "result": result}
     except NotImplementedError as exc:
+        # Retrying an unimplemented intent can never succeed — no backoff.
         logger.warning(f'"Job {job_id} skipped: {exc}"')
         update_job_status(conn, job_id, "error",
                           result={"error": str(exc), "skipped": True})
         return {"status": "skipped", "job_id": job_id, "error": str(exc)}
+    except UnknownEntityError as exc:
+        # Hallucinated entity — retrying can never fix it; fail immediately.
+        logger.error(f'"Job {job_id} rejected: {exc}"')
+        update_job_status(conn, job_id, "error",
+                          result={"error": str(exc), "unknown_entity": True})
+        return {"status": "rejected", "job_id": job_id, "error": str(exc)}
     except Exception as exc:
-        logger.error(f'"Job {job_id} error: {exc}"')
-        update_job_status(conn, job_id, "error", result={"error": str(exc)})
-        return {"status": "error", "job_id": job_id, "error": str(exc)}
+        attempts = (job["attempts"] if "attempts" in job.keys() else 0) + 1
+        if attempts >= MAX_ATTEMPTS:
+            logger.error(f'"Job {job_id} dead-lettered after {attempts} attempts: {exc}"')
+            update_job_status(conn, job_id, "dead_letter",
+                              result={"error": str(exc), "attempts": attempts})
+            notify(
+                f"Job {job_id} ({intent}) failed {attempts} times and was dead-lettered: {exc}\n"
+                f"Review with: make dead-letters",
+                title="Job dead-lettered", priority="high", tags="warning",
+            )
+            return {"status": "dead_letter", "job_id": job_id, "error": str(exc)}
+        retry_at = _next_retry_time(attempts)
+        logger.warning(
+            f'"Job {job_id} attempt {attempts}/{MAX_ATTEMPTS} failed, retry at {retry_at}: {exc}"'
+        )
+        # Status is left runnable (approved / pending); next_retry_at gates it.
+        schedule_job_retry(conn, job_id, attempts, retry_at)
+        return {"status": "retry_scheduled", "job_id": job_id,
+                "attempts": attempts, "next_retry_at": retry_at, "error": str(exc)}
 
 
 def _dispatch(intent: str, payload: dict) -> dict:

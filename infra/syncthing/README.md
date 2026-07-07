@@ -81,3 +81,20 @@ keeps the two layers consistent.
 2. Within a few seconds it appears in `sync/inbox/` on the Pi 5.
 3. The file-watcher logs a structured JSON line and POSTs to the n8n webhook.
 4. A job row shows up in SQLite (`make approve` to see it pending).
+
+## Off-site backup copies (second copy of the DB snapshots)
+
+The nightly backup timer writes gzipped SQLite snapshots to `backups/` on the
+Pi 5. Syncthing gives you free off-site copies — snapshots are KB–MB scale, so
+this costs effectively nothing:
+
+1. On the Pi 5, add `backups/` as a second Syncthing folder, type
+   **Send Only** (the Pi 5 is the sole producer; nothing may write back).
+2. Share it with the Pi 4 and your laptop, both **Receive Only**.
+3. On the receivers, set **File Versioning → Simple** (keep 5) so a corrupted
+   snapshot that syncs over never destroys the previous good copy.
+4. The laptop copy covers house-level disasters (fire/theft take both Pis).
+
+`scripts/healthcheck.sh` alarms if the newest snapshot on the Pi 5 is older
+than 26 hours, so a silently broken timer gets a phone push instead of being
+discovered during a restore.

@@ -19,7 +19,21 @@ def open_db(path: str | Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA_PATH.read_text())
+    _migrate(conn)
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """
+    Idempotent column additions for DBs created before the column existed
+    (CREATE TABLE IF NOT EXISTS in schema.sql never alters existing tables).
+    """
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)")}
+    if "attempts" not in existing:
+        conn.execute("ALTER TABLE jobs ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0")
+    if "next_retry_at" not in existing:
+        conn.execute("ALTER TABLE jobs ADD COLUMN next_retry_at TEXT")
+    conn.commit()
 
 
 def make_dedupe_key(source_ref: str, title: str) -> str:
@@ -74,6 +88,20 @@ def update_job_status(
     conn.execute(
         "UPDATE jobs SET status = ?, result_json = ? WHERE id = ?",
         (status, json.dumps(result) if result is not None else None, job_id),
+    )
+    conn.commit()
+
+
+def schedule_job_retry(
+    conn: sqlite3.Connection,
+    job_id: int,
+    attempts: int,
+    next_retry_at: str,
+) -> None:
+    """Record a failed attempt and when the job becomes runnable again."""
+    conn.execute(
+        "UPDATE jobs SET attempts = ?, next_retry_at = ? WHERE id = ?",
+        (attempts, next_retry_at, job_id),
     )
     conn.commit()
 

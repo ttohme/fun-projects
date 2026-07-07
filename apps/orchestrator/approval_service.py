@@ -112,6 +112,42 @@ def decide(
     }
 
 
+def list_dead_letters(conn) -> list[dict]:
+    """Jobs that exhausted their retries and need human attention."""
+    rows = conn.execute(
+        """
+        SELECT id AS job_id, source_type, source_ref, intent,
+               payload_json, result_json, attempts, updated_at
+        FROM   jobs
+        WHERE  status = 'dead_letter'
+        ORDER  BY updated_at
+        """
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def retry_dead_letter(conn, job_id: int) -> dict:
+    """
+    Reset a dead-lettered job so the executor picks it up again.
+    Raises ValueError if the job is not in dead_letter state.
+    """
+    row = conn.execute(
+        "SELECT id, status FROM jobs WHERE id = ?", (job_id,)
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"No job found with id={job_id}")
+    if row["status"] != "dead_letter":
+        raise ValueError(f"Job {job_id} is {row['status']!r}, not dead_letter")
+
+    conn.execute(
+        "UPDATE jobs SET status = 'approved', attempts = 0, next_retry_at = NULL"
+        " WHERE id = ?",
+        (job_id,),
+    )
+    conn.commit()
+    return {"job_id": job_id, "status": "approved", "attempts": 0}
+
+
 def format_approval_for_review(item: dict) -> str:
     """Render a pending approval as a human-readable string for CLI review."""
     payload = json.loads(item.get("payload_json", "{}"))
@@ -176,6 +212,30 @@ def cmd_review(args, conn) -> None:
             print("  Please enter a, r, s, or q.")
 
 
+def cmd_dead_letters(args, conn) -> None:
+    items = list_dead_letters(conn)
+    if not items:
+        print("No dead-lettered jobs.")
+        return
+    print(f"{len(items)} dead-lettered job(s):\n")
+    for item in items:
+        payload = json.loads(item.get("payload_json") or "{}")
+        result = json.loads(item.get("result_json") or "{}")
+        print(f"  Job ID   : {item['job_id']}")
+        print(f"  Intent   : {item['intent']}")
+        print(f"  Title    : {payload.get('title', '(no title)')}")
+        print(f"  Attempts : {item['attempts']}")
+        print(f"  Error    : {result.get('error', '?')}")
+        print(f"  Source   : {item['source_type']} — {item['source_ref']}")
+        print(f"  Retry    : python approval_service.py retry {item['job_id']}")
+        print()
+
+
+def cmd_retry(args, conn) -> None:
+    result = retry_dead_letter(conn, args.job_id)
+    print(json.dumps(result, indent=2))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Approval service")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -189,6 +249,11 @@ def main() -> None:
     decide_p.add_argument("decision", choices=["approved", "rejected"])
     decide_p.add_argument("--reason", default=None)
 
+    sub.add_parser("dead-letters", help="List jobs that exhausted their retries")
+
+    retry_p = sub.add_parser("retry", help="Reset a dead-lettered job for retry")
+    retry_p.add_argument("job_id", type=int)
+
     args = parser.parse_args()
     conn = open_db(DB_PATH)
 
@@ -198,6 +263,10 @@ def main() -> None:
         cmd_decide(args, conn)
     elif args.command == "review":
         cmd_review(args, conn)
+    elif args.command == "dead-letters":
+        cmd_dead_letters(args, conn)
+    elif args.command == "retry":
+        cmd_retry(args, conn)
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ from pathlib import Path
 import requests as http
 
 from db import insert_approval, insert_job, make_dedupe_key, open_db, update_job_status
+from notifier import notify_approval_needed
 from schema_validator import ValidationError, validate_task_object
 from triage import (
     CONFIDENCE_THRESHOLD,
@@ -39,11 +40,40 @@ REJECTED_DIR = REPO_ROOT / "sync" / "rejected"
 DB_PATH = Path(os.environ.get("DB_PATH", str(REPO_ROOT / "db" / "assistant.db")))
 
 SUPPORTED_TEXT_SUFFIXES = {".txt", ".md", ".csv", ".json", ".xml", ".html"}
-SUPPORTED_DOC_SUFFIXES = {".pdf"}  # future: use pdfminer or pymupdf
+SUPPORTED_DOC_SUFFIXES = {".pdf"}
 
 # document-triage-agent rule: discard below 0.5. Tasks between this and
 # CONFIDENCE_THRESHOLD (0.7) are kept but gated by should_require_approval.
 DISCARD_THRESHOLD = 0.5
+
+# Cap extracted PDF text so a huge document can't blow the LLM context.
+PDF_MAX_CHARS = 20_000
+
+
+def read_pdf_text(path: Path) -> str:
+    """
+    Extract the text layer from a PDF via PyMuPDF (pure CPU, ms per page).
+    Scanned PDFs with no text layer return a marker so the triage agent knows
+    the content wasn't readable (OCR path lands with the GPU features).
+    Degrades to a clear marker if PyMuPDF isn't installed.
+    """
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        return f"[PDF extraction unavailable — install pymupdf: {path.name}]"
+
+    try:
+        with fitz.open(str(path)) as doc:
+            pages = [page.get_text() for page in doc]
+    except Exception as exc:
+        return f"[PDF could not be parsed ({exc}): {path.name}]"
+
+    text = "\n".join(pages).strip()
+    if not text:
+        return f"[PDF has no text layer (scanned document, OCR needed): {path.name}]"
+    if len(text) > PDF_MAX_CHARS:
+        text = text[:PDF_MAX_CHARS] + f"\n[... truncated at {PDF_MAX_CHARS} chars]"
+    return text
 
 
 def read_file_text(path: Path) -> str:
@@ -52,8 +82,7 @@ def read_file_text(path: Path) -> str:
     if suffix in SUPPORTED_TEXT_SUFFIXES:
         return path.read_text(errors="replace")
     if suffix in SUPPORTED_DOC_SUFFIXES:
-        # Placeholder: real deployment would use pdfminer or pymupdf
-        return f"[PDF content extraction not yet configured for: {path.name}]"
+        return read_pdf_text(path)
     return f"[Unsupported file type: {suffix}]"
 
 
@@ -167,6 +196,7 @@ def process_file(
                             requested_action=f"Create task: {task.get('title', '')}",
                         )
                         task["_approval_id"] = approval_id
+                        notify_approval_needed(task, approval_id)
 
             results.append(task)
     finally:

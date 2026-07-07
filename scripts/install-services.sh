@@ -23,7 +23,8 @@ UNIT_SRC="$REPO_ROOT/infra/systemd"
 UNIT_DST="/etc/systemd/system"
 
 units=(assistant-watcher.service assistant-executor.service \
-       assistant-backup.service assistant-backup.timer)
+       assistant-backup.service assistant-backup.timer \
+       assistant-alert@.service)
 if [ "${INSTALL_OPENCLAW:-0}" = "1" ]; then
   units+=(assistant-openclaw.service)
 fi

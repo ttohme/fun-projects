@@ -47,8 +47,13 @@ sudo scripts/uninstall-services.sh
 ## Notes
 
 - All units read secrets from `__REPO__/infra/env/.env` via `EnvironmentFile`.
-- `Restart=on-failure` with `RestartSec=5` rides out transient errors (e.g. n8n
+- `Restart=always` with `RestartSec=5` rides out transient errors (e.g. n8n
   briefly unreachable) without hammering.
+- Crash-loop escalation: `StartLimitIntervalSec=600` + `StartLimitBurst=5`
+  means more than 5 restarts in 10 minutes stops the unit, and
+  `OnFailure=assistant-alert@%n.service` fires a phone push via
+  `scripts/notify.sh` (ntfy) so a dead service never fails silently.
+  Recover with `systemctl reset-failed <unit> && systemctl start <unit>`.
 - Hardening flags (`NoNewPrivileges`, `PrivateTmp`, `ProtectSystem=full`) limit
   blast radius; OpenClaw omits `ProtectSystem=full` in case its binary lives
   outside the protected paths.

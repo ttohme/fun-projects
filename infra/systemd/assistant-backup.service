@@ -1,6 +1,7 @@
 [Unit]
 Description=AI Assistant — SQLite DB backup
 Documentation=https://github.com/ttohme/fun-projects
+OnFailure=assistant-alert@%n.service
 
 [Service]
 Type=oneshot

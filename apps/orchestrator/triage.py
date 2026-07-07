@@ -26,6 +26,7 @@ from db import (
     open_db,
     update_job_status,
 )
+from notifier import notify_approval_needed
 from schema_validator import validate_task_object, ValidationError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -143,6 +144,7 @@ def triage(
                         requested_action=f"Create task: {task.get('title', '')}",
                     )
                     task["_approval_id"] = approval_id
+                    notify_approval_needed(task, approval_id)
         finally:
             conn.close()
 

@@ -33,8 +33,24 @@ for name in "${!TARGETS[@]}"; do
   fi
 done
 
+# Backup freshness: the nightly timer should leave a snapshot < 26h old.
+# Only checked when BACKUP_DIR exists and has at least one snapshot (so a
+# fresh install without backups yet doesn't alarm).
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BACKUP_DIR="${BACKUP_DIR:-$REPO_ROOT/backups}"
+if [ -d "$BACKUP_DIR" ] && ls "$BACKUP_DIR"/assistant-*.db.gz >/dev/null 2>&1; then
+  fresh=$(find "$BACKUP_DIR" -name 'assistant-*.db.gz' -mmin -1560 | head -1)
+  if [ -n "$fresh" ]; then
+    echo "  OK   backups  newest snapshot < 26h old"
+  else
+    echo "  DOWN backups  newest snapshot older than 26h — check assistant-backup.timer" >&2
+    fail=1
+  fi
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo "healthcheck: one or more services are DOWN" >&2
+  "$(dirname "${BASH_SOURCE[0]}")/notify.sh" "One or more services are DOWN — run scripts/healthcheck.sh for detail" "Healthcheck failed" high
   exit 1
 fi
 echo "healthcheck: all services OK"

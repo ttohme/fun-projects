@@ -45,6 +45,7 @@ PY
 if [ "$py_exit" -ne 0 ]; then
   echo "backup-db: integrity check FAILED for $dest — snapshot discarded" >&2
   rm -f "$dest"
+  "$REPO_ROOT/scripts/notify.sh" "Nightly DB backup failed integrity check — snapshot discarded" "Backup FAILED" urgent
   exit 1
 fi
 

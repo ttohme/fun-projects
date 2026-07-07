@@ -153,16 +153,70 @@ def test_execute_job_marks_done_on_success():
     assert "todoist_task_id" in row["result_json"]
 
 
-def test_execute_job_marks_error_on_exception():
+def test_execute_job_schedules_retry_on_transient_failure():
     conn = fresh_db()
     job = _approved_job(conn)
     with patch("job_executor._dispatch", side_effect=Exception("API down")):
         result = execute_job(conn, job)
-    assert result["status"] == "error"
+    assert result["status"] == "retry_scheduled"
+    assert result["attempts"] == 1
     assert "API down" in result["error"]
-    row = conn.execute("SELECT status FROM jobs WHERE id=?",
+    row = conn.execute("SELECT status, attempts, next_retry_at FROM jobs WHERE id=?",
                        (job["id"],)).fetchone()
-    assert row["status"] == "error"
+    assert row["status"] == "approved"  # still runnable, gated by next_retry_at
+    assert row["attempts"] == 1
+    assert row["next_retry_at"] is not None
+
+
+def test_job_awaiting_retry_is_not_picked_up():
+    conn = fresh_db()
+    job = _approved_job(conn)
+    with patch("job_executor._dispatch", side_effect=Exception("API down")):
+        execute_job(conn, job)  # schedules retry ~60s in the future
+    with patch("job_executor._dispatch", return_value={"ok": True}) as mock:
+        results = run_once(conn)
+    assert results == []
+    mock.assert_not_called()
+
+
+def test_job_dead_letters_after_max_attempts():
+    from job_executor import MAX_ATTEMPTS
+    conn = fresh_db()
+    job = _approved_job(conn)
+    with patch("job_executor._dispatch", side_effect=Exception("still down")), \
+         patch("job_executor.notify") as mock_notify:
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            row = conn.execute("SELECT * FROM jobs WHERE id=?", (job["id"],)).fetchone()
+            result = execute_job(conn, row)
+    assert result["status"] == "dead_letter"
+    mock_notify.assert_called_once()
+    row = conn.execute("SELECT status FROM jobs WHERE id=?", (job["id"],)).fetchone()
+    assert row["status"] == "dead_letter"
+
+
+def test_dead_letter_retry_resets_job():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "orchestrator"))
+    from approval_service import list_dead_letters, retry_dead_letter
+    from job_executor import MAX_ATTEMPTS
+    conn = fresh_db()
+    job = _approved_job(conn)
+    with patch("job_executor._dispatch", side_effect=Exception("down")), \
+         patch("job_executor.notify"):
+        for _ in range(MAX_ATTEMPTS):
+            row = conn.execute("SELECT * FROM jobs WHERE id=?", (job["id"],)).fetchone()
+            execute_job(conn, row)
+    assert len(list_dead_letters(conn)) == 1
+
+    retry_dead_letter(conn, job["id"])
+    row = conn.execute("SELECT status, attempts, next_retry_at FROM jobs WHERE id=?",
+                       (job["id"],)).fetchone()
+    assert row["status"] == "approved"
+    assert row["attempts"] == 0
+    assert row["next_retry_at"] is None
+
+    import pytest as _pytest
+    with _pytest.raises(ValueError, match="not dead_letter"):
+        retry_dead_letter(conn, job["id"])
 
 
 def test_execute_job_marks_skipped_on_not_implemented():

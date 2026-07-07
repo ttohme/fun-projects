@@ -10,11 +10,13 @@ CREATE TABLE IF NOT EXISTS jobs (
     source_ref       TEXT    NOT NULL,          -- external ID from the source system
     dedupe_key       TEXT    NOT NULL UNIQUE,   -- SHA256(source_ref + "|" + title); prevents double-processing
     status           TEXT    NOT NULL DEFAULT 'pending',
-                                                -- 'pending' | 'approved' | 'rejected' | 'done' | 'error'
+                                                -- 'pending' | 'approved' | 'rejected' | 'done' | 'error' | 'dead_letter'
     intent           TEXT,                      -- classified intent set by the triage agent
     payload_json     TEXT    NOT NULL,          -- raw intake payload serialised as JSON text
     result_json      TEXT,                      -- output from the processing node, if any
     approval_required INTEGER NOT NULL DEFAULT 0,  -- 0 = auto-proceed, 1 = human gate required
+    attempts         INTEGER NOT NULL DEFAULT 0,   -- execution attempts so far
+    next_retry_at    TEXT,                      -- ISO timestamp; NULL = runnable now
     created_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );

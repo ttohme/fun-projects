@@ -20,6 +20,7 @@ from pathlib import Path
 import requests as http
 
 from db import insert_approval, insert_job, make_dedupe_key, open_db
+from notifier import notify_approval_needed
 from schema_validator import ValidationError, validate_task_object
 from triage import (
     LITELLM_MASTER_KEY,
@@ -120,6 +121,7 @@ def capture(
                     requested_action=f"Create task: {task.get('title', '')}",
                 )
                 task["_approval_id"] = approval_id
+                notify_approval_needed(task, approval_id)
         finally:
             conn.close()
 

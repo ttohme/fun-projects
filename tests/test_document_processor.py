@@ -3,6 +3,8 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "orchestrator"))
 
 from db import open_db
@@ -150,3 +152,56 @@ def test_process_file_high_risk_adds_approval(tmp_path):
         results = process_file(f, db_path=db)
     assert results[0]["approval_required"] is True
     assert "_approval_id" in results[0]
+
+
+# ── PDF ingestion ─────────────────────────────────────────────────────────────
+
+def _make_pdf(path, text=""):
+    fitz = pytest.importorskip("fitz")
+    doc = fitz.open()
+    page = doc.new_page()
+    if text:
+        page.insert_text((72, 72), text)
+    doc.save(str(path))
+    doc.close()
+
+
+def test_read_pdf_text_extracts_text_layer(tmp_path):
+    from document_processor import read_file_text
+    pdf = tmp_path / "invoice.pdf"
+    _make_pdf(pdf, "Pay the water bill by Friday")
+    text = read_file_text(pdf)
+    assert "Pay the water bill" in text
+
+
+def test_read_pdf_scanned_no_text_layer_returns_marker(tmp_path):
+    from document_processor import read_file_text
+    pdf = tmp_path / "scan.pdf"
+    _make_pdf(pdf)  # empty page = no text layer
+    text = read_file_text(pdf)
+    assert "no text layer" in text and "scan.pdf" in text
+
+
+def test_read_pdf_corrupt_file_returns_marker(tmp_path):
+    from document_processor import read_pdf_text
+    bad = tmp_path / "bad.pdf"
+    bad.write_bytes(b"not a pdf at all")
+    text = read_pdf_text(bad)
+    assert "could not be parsed" in text
+
+
+def test_read_pdf_truncates_huge_documents(tmp_path):
+    from document_processor import read_pdf_text, PDF_MAX_CHARS
+    fitz = pytest.importorskip("fitz")
+    doc = fitz.open()
+    chunk = "task item text " * 200
+    for _ in range(30):
+        page = doc.new_page()
+        for y in range(72, 700, 14):
+            page.insert_text((40, y), chunk[:120])
+    pdf = tmp_path / "huge.pdf"
+    doc.save(str(pdf))
+    doc.close()
+    text = read_pdf_text(pdf)
+    assert len(text) <= PDF_MAX_CHARS + 100
+    assert "truncated" in text

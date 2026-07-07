@@ -12,7 +12,7 @@ fi
 UNIT_DST="/etc/systemd/system"
 units=(assistant-watcher.service assistant-executor.service \
        assistant-openclaw.service assistant-backup.service \
-       assistant-backup.timer)
+       assistant-backup.timer assistant-alert@.service)
 
 for u in "${units[@]}"; do
   systemctl disable --now "$u" 2>/dev/null || true

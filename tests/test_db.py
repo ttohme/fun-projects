@@ -160,3 +160,33 @@ def test_approval_decision_rejected():
     row = conn.execute("SELECT decision FROM approvals WHERE id = ?",
                        (approval_id,)).fetchone()
     assert row["decision"] == "rejected"
+
+
+def test_open_db_migrates_legacy_schema(tmp_path):
+    # Regression: DBs created before attempts/next_retry_at existed must be
+    # upgraded in place (CREATE TABLE IF NOT EXISTS never alters tables).
+    import sqlite3
+    legacy = tmp_path / "legacy.db"
+    conn = sqlite3.connect(str(legacy))
+    conn.execute("""
+        CREATE TABLE jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_type TEXT NOT NULL, source_ref TEXT NOT NULL,
+            dedupe_key TEXT NOT NULL UNIQUE,
+            status TEXT NOT NULL DEFAULT 'pending',
+            intent TEXT, payload_json TEXT NOT NULL, result_json TEXT,
+            approval_required INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+            updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+    migrated = open_db(legacy)
+    cols = {r["name"] for r in migrated.execute("PRAGMA table_info(jobs)")}
+    assert "attempts" in cols and "next_retry_at" in cols
+    # And it's idempotent on a second open
+    migrated.close()
+    again = open_db(legacy)
+    again.close()
