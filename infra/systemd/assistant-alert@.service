@@ -1,0 +1,11 @@
+[Unit]
+Description=AI Assistant — failure alert for %i
+Documentation=https://github.com/ttohme/fun-projects
+
+# Triggered via OnFailure= from the other assistant units. %i carries the
+# failing unit's name. One-shot: sends a phone push via ntfy and exits.
+[Service]
+Type=oneshot
+User=__USER__
+WorkingDirectory=__REPO__
+ExecStart=__REPO__/scripts/notify.sh "systemd unit %i entered failed state (crash-loop limit hit or fatal error). Check: journalctl -u %i -n 50" "Service FAILED: %i" urgent

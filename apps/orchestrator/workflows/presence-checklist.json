@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "__REPLACE_WITH_N8N_INSTANCE_ID__"
+  },
+  "name": "Presence checklist (departure / arrival)",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["home", "presence"],
+  "_setup_notes": [
+    "Import this file into n8n via Settings → Import workflow.",
+    "Event-driven, read-only: when you leave or arrive (HA person entity),",
+    "check the house state and push anything that needs attention.",
+    "Required nodes to configure after import:",
+    "  1. Webhook — POST /webhook/presence; fired by a Home Assistant automation",
+    "     on person.you state change (home → not_home and back)",
+    "  2. Execute Command — read-only checks via the existing client:",
+    "     PYTHONPATH=apps/orchestrator .venv/bin/python -c \"from hass_client import",
+    "     get_states; ...\" — doors/windows open, lights left on, heating running",
+    "     (reads auto-proceed under existing policy; NO writes from this flow)",
+    "  3. IF anything flagged — ntfy push via scripts/notify.sh:",
+    "     'Leaving: kitchen window open, 3 lights on'",
+    "  4. Turning things OFF stays a separate approval-gated home_control_write",
+    "     (one-tap approve from the same notification via the scenes flow)."
+  ]
+}

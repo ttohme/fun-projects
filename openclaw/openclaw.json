@@ -1,0 +1,43 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 18789,
+    "reload_mode": "hybrid",
+    "read_timeout_ms": 30000,
+    "write_timeout_ms": 30000
+  },
+  "auth": {
+    "type": "bearer",
+    "token_env": "OPENCLAW_TOKEN",
+    "allow_unauthenticated_health": true
+  },
+  "upstream": {
+    "litellm_base_url": "http://127.0.0.1:4000",
+    "default_model": "assistant-default",
+    "timeout_ms": 60000
+  },
+  "routing": {
+    "rules": [
+      {
+        "match": {"tag": "private"},
+        "model": "local-private",
+        "reason": "Private-tagged requests never leave the host"
+      },
+      {
+        "match": {"tag": "agent"},
+        "model": "local-agent",
+        "reason": "Tool-calling/structured-output tasks routed to Hermes 3 on the GPU box; LiteLLM falls back to assistant-small when it is offline"
+      },
+      {
+        "match": {"tag": "planning"},
+        "model": "planner",
+        "reason": "Planning tasks routed to Anthropic via LiteLLM"
+      }
+    ]
+  },
+  "observability": {
+    "log_requests": true,
+    "log_responses": false,
+    "metrics_path": "/metrics"
+  }
+}

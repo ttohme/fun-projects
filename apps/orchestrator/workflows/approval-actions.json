@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "__REPLACE_WITH_N8N_INSTANCE_ID__"
+  },
+  "name": "Approval Actions (one-tap)",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["approvals", "ntfy"],
+  "_setup_notes": [
+    "Import this file into n8n via Settings → Import workflow.",
+    "Handles the Approve/Reject buttons that ntfy approval pushes carry.",
+    "Required nodes to configure after import:",
+    "  1. Webhook — POST /webhook/approval-action; query params: id, action, exp, sig.",
+    "     Set APPROVAL_ACTION_URL in infra/env/.env to this webhook's full URL.",
+    "  2. Execute Command — PYTHONPATH=apps/orchestrator .venv/bin/python",
+    "     apps/orchestrator/approval_actions.py --id {{$json.query.id}}",
+    "     --action {{$json.query.action}} --exp {{$json.query.exp}} --sig {{$json.query.sig}}",
+    "     (verification happens in Python: HMAC signature, expiry, single-use).",
+    "  3. Respond to Webhook — 200 with the decision JSON on success; 400 with the",
+    "     error message when the command exits non-zero.",
+    "Security: the webhook does NO decision logic itself — a request with a bad or",
+    "expired signature is rejected by approval_actions.py, and an already-decided",
+    "approval cannot be re-decided (single-use)."
+  ]
+}

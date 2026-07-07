@@ -1,0 +1,82 @@
+model_list:
+  - model_name: assistant-default
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+    model_info:
+      mode: chat
+      base_model: gpt-4o
+
+  - model_name: assistant-small
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+    model_info:
+      mode: chat
+      base_model: gpt-4o-mini
+
+  - model_name: planner
+    litellm_params:
+      model: anthropic/claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+      # Claude doesn't accept response_format / seed — drop them rather than error.
+      drop_params: true
+    model_info:
+      mode: chat
+      base_model: claude-sonnet-4-6
+
+  - model_name: local-private
+    litellm_params:
+      model: ollama/llama3.1
+      # Points at the Windows PC's Ollama over the tailnet (set OLLAMA_BASE_URL
+      # in infra/env/.env, e.g. http://windows-pc.tailnet.ts.net:11434).
+      # Falls back to host.docker.internal for single-machine setups.
+      api_base: os.environ/OLLAMA_BASE_URL
+      # Ollama ignores many OpenAI params; drop rather than error.
+      drop_params: true
+    model_info:
+      mode: chat
+      base_model: llama3.1
+
+  - model_name: local-agent
+    litellm_params:
+      # Hermes 3 (Nous Research, llama3.1 finetune) — trained for function
+      # calling and schema-exact JSON, the two things triage and HA-intent
+      # extraction lean on hardest. ollama_chat/ (not ollama/) so LiteLLM uses
+      # /api/chat, which carries tool definitions through to Hermes' template.
+      # Pull on the Windows box: ollama pull hermes3:8b (~4.7GB, fits 8-12GB VRAM).
+      model: ollama_chat/hermes3:8b
+      api_base: os.environ/OLLAMA_BASE_URL
+      drop_params: true
+    model_info:
+      mode: chat
+      base_model: hermes3
+
+router_settings:
+  routing_strategy: simple-shuffle
+  fallbacks:
+    - {"assistant-default": ["assistant-small", "planner"]}
+    - {"planner": ["assistant-default"]}
+    # Windows box off → non-private agent traffic falls back to the cloud.
+    # local-private keeps NO fallback on purpose: tag:private requests fail
+    # closed rather than leak to a cloud API.
+    - {"local-agent": ["assistant-small"]}
+  num_retries: 2
+  retry_after: 5
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: null
+  telemetry: false
+
+litellm_settings:
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
+  langfuse_secret: os.environ/LANGFUSE_SECRET_KEY
+  langfuse_public_key: os.environ/LANGFUSE_PUBLIC_KEY
+  langfuse_host: os.environ/LANGFUSE_HOST
+  # Hard budget cap: refuse requests once spend reaches this USD amount.
+  # Prevents runaway API costs. Adjust or remove if you need more headroom.
+  # (Global proxy budgets live under litellm_settings, not general_settings.)
+  max_budget: 20
+  budget_duration: 30d

@@ -1,0 +1,26 @@
+# Deterministic prep-task rules for calendar events (calendar_ingest.py).
+# No LLM involved: `match` is a regex tested against the event summary, and
+# each matching event generates the listed tasks. {summary} and {date} are
+# substituted. days_before offsets the due date from the event date.
+rules:
+  - match: "(?i)flight|airport"
+    tasks:
+      - title: "Pack for: {summary}"
+        days_before: 1
+      - title: "Online check-in: {summary}"
+        days_before: 1
+
+  - match: "(?i)dentist|doctor|clinic"
+    tasks:
+      - title: "Confirm appointment: {summary}"
+        days_before: 2
+
+  - match: "(?i)birthday"
+    tasks:
+      - title: "Get a gift/card: {summary}"
+        days_before: 3
+
+  - match: "(?i)interview|presentation|demo"
+    tasks:
+      - title: "Prepare for: {summary}"
+        days_before: 1

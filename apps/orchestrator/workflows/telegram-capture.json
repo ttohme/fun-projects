@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "__REPLACE_WITH_N8N_INSTANCE_ID__"
+  },
+  "name": "Telegram → Task",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["intake", "chat", "telegram"],
+  "_setup_notes": [
+    "Import this file into n8n via Settings → Import workflow.",
+    "Prereq: create the bot with @BotFather, put the token in n8n's Telegram credential",
+    "(TELEGRAM_BOT_TOKEN in infra/env/.env is the reference copy).",
+    "Required nodes to configure after import:",
+    "  1. Telegram Trigger — on message; long-polls Telegram, so no inbound port is opened",
+    "  2. IF node — allow only your own chat_id (TELEGRAM_ALLOWED_CHAT_ID); drop everything else.",
+    "     The bot is capture-only: incoming text NEVER triggers actions directly, it only",
+    "     drafts a task that flows through the normal approval pipeline (AGENTS.md).",
+    "  3. Execute Command — PYTHONPATH=apps/orchestrator .venv/bin/python -c capture(...)",
+    "     with source_type='chat' (already allowed by db/schema.sql and the task schema);",
+    "     or HTTP Request to a small wrapper webhook if you prefer not to exec.",
+    "  4. Telegram Send — reply with the drafted task title and whether it auto-proceeded",
+    "     or is waiting in the approval queue (make approve / ntfy push).",
+    "Governance: chat capture follows the same rules as voice — the drafting agent runs,",
+    "should_require_approval() decides gating, high-risk intents always gate."
+  ]
+}

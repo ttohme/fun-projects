@@ -1,0 +1,33 @@
+{
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "__REPLACE_WITH_N8N_INSTANCE_ID__"
+  },
+  "name": "Quick Capture (share sheet / bookmarklet)",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["intake", "chat", "capture"],
+  "_setup_notes": [
+    "Import this file into n8n via Settings → Import workflow.",
+    "One webhook for both phone share-sheet and browser bookmarklet capture,",
+    "reachable only over the tailnet.",
+    "Required nodes to configure after import:",
+    "  1. Webhook — POST /webhook/capture; body: {\"text\": \"...\", \"source\": \"share|bookmarklet\"}",
+    "  2. Execute Command — PYTHONPATH=apps/orchestrator .venv/bin/python -c",
+    "     \"from voice_intake import capture; import json,sys;",
+    "      print(json.dumps(capture(description=sys.argv[1], source_ref='quick-capture')))\"",
+    "     (source_type stays 'voice' → every quick capture is approval-gated, same as voice)",
+    "  3. Respond to Webhook — return the drafted task JSON.",
+    "Phone (Android): install 'HTTP Shortcuts' (free, open-source), create a shortcut",
+    "  POSTing the shared text to http://pi5.tailnet.ts.net:5678/webhook/capture,",
+    "  then enable it as a share-sheet target. iOS: a Shortcuts 'Get Contents of URL' action.",
+    "Browser bookmarklet:",
+    "  javascript:fetch('http://pi5.tailnet.ts.net:5678/webhook/capture',{method:'POST',",
+    "  headers:{'Content-Type':'application/json'},body:JSON.stringify({text:document.title+' '+location.href,",
+    "  source:'bookmarklet'})}).then(()=>alert('Captured'))",
+    "Works from any device on the tailnet; nothing is exposed to the internet."
+  ]
+}

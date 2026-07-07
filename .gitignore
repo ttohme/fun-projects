@@ -1,0 +1,57 @@
+# ── Secrets ────────────────────────────────────────────────────────────────────
+infra/env/.env
+*.env
+!infra/env/.env.example
+
+# ── Python ─────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+*.pyo
+
+# ── Node / n8n ─────────────────────────────────────────────────────────────────
+node_modules/
+.n8n/
+.npm/
+
+# ── Docker volumes (if bind-mounted locally) ───────────────────────────────────
+infra/volumes/
+
+# ── SQLite runtime files ───────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── DB backups ─────────────────────────────────────────────────────────────────
+backups/
+
+# ── Improvement pipeline scratch (reports, eval outputs) ────────────────────────
+var/
+
+# ── Logs ───────────────────────────────────────────────────────────────────────
+logs/
+*.log
+*.jsonl
+# Eval regression cases are versioned (AGENTS.md requires adding them)
+!evals/cases/*.jsonl
+
+# ── macOS ──────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ── JetBrains IDEs ─────────────────────────────────────────────────────────────
+.idea/
+*.iml
+
+# ── VS Code ────────────────────────────────────────────────────────────────────
+.vscode/
+
+# ── Syncthing temp files ───────────────────────────────────────────────────────
+.stfolder
+.stignore
+~syncthing~*

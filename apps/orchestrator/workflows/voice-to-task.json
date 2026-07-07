@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "__REPLACE_WITH_N8N_INSTANCE_ID__"
+  },
+  "name": "Voice → Task",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["intake", "voice"],
+  "_setup_notes": [
+    "Import this file into n8n via Settings → Import workflow.",
+    "Required nodes to configure after import:",
+    "  1. Webhook — POST /webhook/voice-intake; triggered by mobile shortcut or Home Assistant",
+    "  2. HTTP Request (Whisper/STT) — transcribe audio to text if input is audio",
+    "  3. HTTP Request (LiteLLM) — POST to http://litellm:4000/chat/completions, model=assistant-default",
+    "  4. JSON Validate — use schema from apps/orchestrator/schemas/task-object.schema.json",
+    "  5. IF node — branch on approval_required flag",
+    "  6. Wait node — approval gate for ambiguous due dates or low-confidence classifications",
+    "  7. Todoist Create Task — set credentials from TODOIST_API_TOKEN",
+    "  8. SQLite Insert — write audit row to db/assistant.db jobs table"
+  ]
+}

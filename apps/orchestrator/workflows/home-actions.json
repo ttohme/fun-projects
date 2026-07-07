@@ -1,0 +1,26 @@
+{
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "__REPLACE_WITH_N8N_INSTANCE_ID__"
+  },
+  "name": "Home Actions",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["home", "automation"],
+  "_setup_notes": [
+    "Import this file into n8n via Settings → Import workflow.",
+    "Required nodes to configure after import:",
+    "  1. Webhook — POST /webhook/home-action; triggered by OpenClaw or chat",
+    "  2. HTTP Request (LiteLLM) — classify intent: read vs write, entity, service",
+    "  3. IF node — branch: read-only vs state-changing",
+    "  4. Home Assistant Read — GET /api/states via HASS_TOKEN (auto-proceed for reads)",
+    "  5. Wait node — MANDATORY approval gate for ALL state-changing actions",
+    "  6. Home Assistant Service Call — POST /api/services/<domain>/<service>",
+    "  7. SQLite Insert — write audit row to db/assistant.db jobs table",
+    "The Wait node for step 5 must NOT be bypassed. All non-read HA actions require approval.",
+    "On HA API error: do not retry state-changing calls; surface error and require reviewer action."
+  ]
+}

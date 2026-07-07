@@ -1,0 +1,109 @@
+# Raspberry Pi 5 — "the brain"
+# Core pipeline: workflow engine, model router, and the shared Redis queue.
+# Langfuse and Uptime Kuma live on the Pi 4 (see docker-compose.pi4.yml).
+# Ollama and OpenHands live on the Windows PC.
+#
+# Run from the repo root WITH the env file flag — compose only interpolates
+# ${VARS} from the shell or --env-file, never from a service's env_file:
+#
+#   docker compose --env-file infra/env/.env -f infra/docker-compose.pi5.yml up -d
+#
+# Reaches the Pi 4's Langfuse and the Windows Ollama over the tailnet via
+# LANGFUSE_HOST and OLLAMA_BASE_URL in infra/env/.env.
+
+networks:
+  ai-net:
+    driver: bridge
+
+volumes:
+  n8n_data:
+  redis_data:
+  ntfy_data:
+
+services:
+
+  ntfy:
+    # Self-hosted push notifications to the phone (free open-source client).
+    # Topic name acts as the shared secret — pick a random NTFY_TOPIC and keep
+    # the port tailnet-only (infra/tailscale/acl.json).
+    image: binwiederhier/ntfy:v2.11.0
+    restart: unless-stopped
+    command: serve --cache-file /var/cache/ntfy/cache.db
+    environment:
+      NTFY_BEHIND_PROXY: "false"
+    ports:
+      - "8090:80"
+    volumes:
+      - ntfy_data:/var/cache/ntfy
+    networks: [ai-net]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/v1/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks: [ai-net]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  litellm:
+    image: ghcr.io/berriai/litellm:${LITELLM_IMAGE_TAG:-main-stable}
+    restart: unless-stopped
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_HOST: ${LANGFUSE_HOST}
+    command: ["--config", "/app/litellm.yaml", "--port", "4000"]
+    # Lets the container resolve host.docker.internal for single-machine
+    # fallback; tailnet hostnames resolve normally.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm.yaml:/app/litellm.yaml:ro
+    networks: [ai-net]
+    healthcheck:
+      # The litellm image has no curl/wget; python3 is always present.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  n8n:
+    image: n8nio/n8n:1
+    restart: unless-stopped
+    environment:
+      # n8n 1.x uses built-in user management; the old basic-auth env vars
+      # were removed in 1.0 and are silently ignored — do not add them back.
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_LOG_LEVEL: info
+      WEBHOOK_URL: ${N8N_WEBHOOK_BASE_URL}
+      GENERIC_TIMEZONE: "UTC"
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ../apps/orchestrator/workflows:/opt/n8n-workflows:ro
+    networks: [ai-net]
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5678/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 10

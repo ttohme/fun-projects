@@ -1,0 +1,25 @@
+[Unit]
+Description=AI Assistant — OpenClaw gateway
+Documentation=https://github.com/ttohme/fun-projects
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=600
+StartLimitBurst=5
+OnFailure=assistant-alert@%n.service
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__REPO__
+EnvironmentFile=__REPO__/infra/env/.env
+# OpenClaw is an external binary. __OPENCLAW_BIN__ is substituted by
+# scripts/install-services.sh (OPENCLAW_BIN=/path sudo scripts/install-services.sh);
+# env-file variables are NOT expanded in ExecStart, so it must be a literal path.
+ExecStart=__OPENCLAW_BIN__ --config __REPO__/openclaw/openclaw.json
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

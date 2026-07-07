@@ -1,0 +1,177 @@
+# Combined single-machine stack (see DEPLOYMENT.md for the 3-machine split).
+#
+# Run from the repo root WITH the env file flag — compose only interpolates
+# ${VARS} from the shell or --env-file, never from a service's env_file:
+#
+#   docker compose --env-file infra/env/.env -f infra/docker-compose.yml up -d
+#
+# (or `make up`, which passes the flag for you)
+#
+# Each service receives only the env vars it needs — no blanket env_file, so a
+# compromised container (especially OpenHands, which mounts the Docker socket)
+# can't read the whole secret set.
+
+networks:
+  ai-net:
+    driver: bridge
+
+volumes:
+  n8n_data:
+  langfuse_db_data:
+  redis_data:
+  uptime_kuma_data:
+  openhands_data:
+  ntfy_data:
+
+services:
+
+  ntfy:
+    # Self-hosted push notifications to the phone (free open-source client).
+    # Topic name acts as the shared secret — pick a random NTFY_TOPIC and keep
+    # the port tailnet-only (infra/tailscale/acl.json).
+    image: binwiederhier/ntfy:v2.11.0
+    restart: unless-stopped
+    command: serve --cache-file /var/cache/ntfy/cache.db
+    environment:
+      NTFY_BEHIND_PROXY: "false"
+    ports:
+      - "8090:80"
+    volumes:
+      - ntfy_data:/var/cache/ntfy
+    networks: [ai-net]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/v1/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks: [ai-net]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  litellm:
+    image: ghcr.io/berriai/litellm:${LITELLM_IMAGE_TAG:-main-stable}
+    restart: unless-stopped
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_HOST: ${LANGFUSE_HOST}
+    command: ["--config", "/app/litellm.yaml", "--port", "4000"]
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./litellm.yaml:/app/litellm.yaml:ro
+    networks: [ai-net]
+    healthcheck:
+      # The litellm image has no curl/wget; python3 is always present.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  langfuse-db:
+    # Langfuse v2 requires PostgreSQL (Prisma); it cannot run on SQLite.
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse_db_data:/var/lib/postgresql/data
+    networks: [ai-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  langfuse:
+    image: langfuse/langfuse:2
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql://langfuse:${POSTGRES_PASSWORD}@langfuse-db:5432/langfuse"
+      SALT: ${LANGFUSE_SALT}
+      NEXTAUTH_SECRET: ${LANGFUSE_SECRET_KEY}
+      NEXTAUTH_URL: "http://localhost:3000"
+      TELEMETRY_ENABLED: "false"
+    ports:
+      - "3000:3000"
+    networks: [ai-net]
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    healthcheck:
+      # node:alpine base image has busybox wget, not curl.
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/public/health"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+
+  n8n:
+    image: n8nio/n8n:1
+    restart: unless-stopped
+    environment:
+      # n8n 1.x uses built-in user management; the old basic-auth env vars
+      # were removed in 1.0 and are silently ignored — do not add them back.
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_LOG_LEVEL: info
+      WEBHOOK_URL: ${N8N_WEBHOOK_BASE_URL}
+      GENERIC_TIMEZONE: "UTC"
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ../apps/orchestrator/workflows:/opt/n8n-workflows:ro
+    networks: [ai-net]
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5678/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    volumes:
+      - uptime_kuma_data:/app/data
+    networks: [ai-net]
+
+  openhands:
+    # WARNING: mounts Docker socket — restrict access to trusted users only
+    image: ghcr.io/all-hands-ai/openhands:${OPENHANDS_IMAGE_TAG:-0.38}
+    restart: unless-stopped
+    environment:
+      # Talks to the LiteLLM proxy, so the key is the LiteLLM master key and
+      # the model is a litellm_proxy/<alias> from infra/litellm.yaml.
+      LLM_MODEL: ${OPENHANDS_LLM_MODEL}
+      LLM_API_KEY: ${LITELLM_MASTER_KEY}
+      LLM_BASE_URL: "http://litellm:4000"
+      SANDBOX_RUNTIME_CONTAINER_IMAGE: ${OPENHANDS_RUNTIME_IMAGE:-docker.all-hands.dev/all-hands-ai/runtime:0.38-nikolaik}
+    ports:
+      - "3333:3000"
+    volumes:
+      - openhands_data:/opt/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [ai-net]
+    depends_on:
+      litellm:
+        condition: service_healthy

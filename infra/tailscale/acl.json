@@ -1,0 +1,81 @@
+// Tailscale ACL for the personal AI assistant tailnet.
+// Paste into the Tailscale admin console (Access Controls), adjusting the
+// email/tag names to match your tailnet. The default Tailscale policy is
+// allow-all; this replaces it with least-privilege between the three machines.
+//
+// Model: tag each machine by role, then only open the specific ports each
+// role needs to reach. Your personal devices (phone/laptop) get the human
+// dashboards; the machines get only the service-to-service links from
+// DEPLOYMENT.md.
+{
+  "tagOwners": {
+    "tag:brain":   ["autogroup:admin"], // Raspberry Pi 5
+    "tag:monitor": ["autogroup:admin"], // Raspberry Pi 4
+    "tag:muscle":  ["autogroup:admin"]  // Windows PC
+  },
+
+  "acls": [
+    // ── Your own devices reach the human-facing dashboards ──────────────────
+    // Note: OpenClaw (18789) is intentionally absent — it binds 127.0.0.1 only
+    // (see openclaw/openclaw.json). Reach it via SSH tunnel or `tailscale serve`.
+    {
+      "action": "accept",
+      "src": ["autogroup:member"],
+      "dst": [
+        "tag:brain:5678",    // n8n UI
+        "tag:brain:8090",    // ntfy push server (phone app subscribes here)
+        "tag:monitor:3000",  // Langfuse trace explorer
+        "tag:monitor:3001",  // Uptime Kuma dashboard
+        "tag:muscle:3333"    // OpenHands sandbox UI
+      ]
+    },
+
+    // ── Pi 5 (brain) → Windows: Ollama (local models), OpenHands (code_job
+    //    dispatch), Whisper server (voice memo transcription) ────────────────
+    {
+      "action": "accept",
+      "src": ["tag:brain"],
+      "dst": ["tag:muscle:11434", "tag:muscle:3333", "tag:muscle:8000"]
+    },
+
+    // ── Pi 5 (brain) → Pi 4 Langfuse, for traces ────────────────────────────
+    {
+      "action": "accept",
+      "src": ["tag:brain"],
+      "dst": ["tag:monitor:3000"]
+    },
+
+    // ── Windows (muscle) → Pi 5 LiteLLM, for OpenHands inference ─────────────
+    {
+      "action": "accept",
+      "src": ["tag:muscle"],
+      "dst": ["tag:brain:4000"]
+    },
+
+    // ── Pi 4 (monitor) → everything it watches via Uptime Kuma ──────────────
+    // OpenClaw (18789) is loopback-only and can't be probed over the tailnet;
+    // monitor it on the Pi 5 itself (scripts/healthcheck.sh or a Kuma push).
+    {
+      "action": "accept",
+      "src": ["tag:monitor"],
+      "dst": [
+        "tag:brain:5678",
+        "tag:brain:4000",
+        "tag:muscle:11434",
+        "tag:muscle:3333"
+      ]
+    }
+
+    // Everything else is denied by default (no trailing allow-all rule).
+  ],
+
+  // SSH into the machines for ops, from your own devices only.
+  "ssh": [
+    {
+      "action": "accept",
+      "src": ["autogroup:member"],
+      "dst": ["tag:brain", "tag:monitor", "tag:muscle"],
+      "users": ["autogroup:nonroot", "root"]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "__REPLACE_WITH_N8N_INSTANCE_ID__"
+  },
+  "name": "Email → Todoist",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["intake", "email"],
+  "_setup_notes": [
+    "Import this file into n8n via Settings → Import workflow.",
+    "Required nodes to configure after import:",
+    "  1. Gmail Trigger — set credentials and filter to AI inbox label",
+    "  2. HTTP Request (LiteLLM) — POST to http://litellm:4000/chat/completions, model=planner",
+    "  3. JSON Validate — use schema from apps/orchestrator/schemas/task-object.schema.json",
+    "  4. Wait node — approval gate; configure reviewer notification channel",
+    "  5. Todoist Create Task — set credentials from TODOIST_API_TOKEN",
+    "  6. SQLite Insert — write audit row to db/assistant.db jobs table",
+    "Renew Gmail watch daily via a separate scheduled workflow."
+  ]
+}
