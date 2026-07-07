@@ -1,6 +1,7 @@
 .PHONY: up down logs db-init watcher evals validate test approve execute capture \
         bootstrap backup restore-db healthcheck install-services uninstall-services \
-        logrotate-install dead-letters hass-cache help
+        logrotate-install dead-letters hass-cache ledger-sync nudges briefing \
+        calendar-ingest help
 
 ENV_FILE := infra/env/.env
 
@@ -41,6 +42,18 @@ dead-letters: db-init ## List jobs that exhausted their retries
 
 hass-cache: db-init ## Refresh the Home Assistant entity cache (requires HASS_URL/HASS_TOKEN)
 	PYTHONPATH=apps/orchestrator $(PYTHON) apps/orchestrator/hass_registry.py refresh
+
+ledger-sync: db-init ## Sync Todoist tasks into the local shadow ledger
+	PYTHONPATH=apps/orchestrator $(PYTHON) apps/orchestrator/todoist_ledger.py sync
+
+nudges: db-init ## Push a stale-task nudge (--dry-run via ARGS)
+	PYTHONPATH=apps/orchestrator $(PYTHON) apps/orchestrator/todoist_ledger.py nudge $(ARGS)
+
+briefing: ## Build and push the morning briefing (--dry-run via ARGS)
+	PYTHONPATH=apps/orchestrator $(PYTHON) apps/orchestrator/briefing.py $(ARGS)
+
+calendar-ingest: db-init ## Generate prep tasks from the calendar (--dry-run via ARGS)
+	PYTHONPATH=apps/orchestrator $(PYTHON) apps/orchestrator/calendar_ingest.py run $(ARGS)
 
 execute: db-init ## Run job executor once (--dry-run to preview, --watch to poll)
 	$(PYTHON) apps/orchestrator/job_executor.py $(ARGS)

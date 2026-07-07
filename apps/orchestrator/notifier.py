@@ -28,10 +28,12 @@ def notify(
     tags: str = "",
     url: str = "",
     topic: str = "",
+    actions: str = "",
 ) -> bool:
     """
     Publish a notification. Returns True on success, False otherwise.
     No-op (returns False) when NTFY_URL is not configured.
+    `actions` is a raw ntfy Actions header (buttons on the notification).
     """
     base = url or NTFY_URL
     if not base:
@@ -42,6 +44,8 @@ def notify(
         headers["Title"] = title
     if tags:
         headers["Tags"] = tags
+    if actions:
+        headers["Actions"] = actions
 
     try:
         resp = requests.post(
@@ -57,13 +61,25 @@ def notify(
 
 
 def notify_approval_needed(task: dict, approval_id: int | None = None) -> bool:
-    """Notify that a new job is waiting for human approval."""
-    title = "Approval needed"
+    """
+    Notify that a new job is waiting for human approval. When one-tap actions
+    are configured (APPROVAL_ACTION_URL/SECRET), the push carries signed
+    Approve/Reject buttons; otherwise it's a plain notification.
+    """
+    actions = ""
+    if approval_id is not None:
+        try:
+            from approval_actions import action_buttons
+            actions = action_buttons(approval_id)
+        except Exception as exc:  # buttons are optional sugar, never fatal
+            print(f"notifier: could not build action buttons: {exc}", file=sys.stderr)
+
     ref = f" (approval #{approval_id})" if approval_id is not None else ""
     return notify(
         f"{task.get('title', '(no title)')} — intent {task.get('intent', '?')}{ref}\n"
         f"Review with: make approve",
-        title=title,
+        title="Approval needed",
         priority="high",
         tags="hand",
+        actions=actions,
     )
