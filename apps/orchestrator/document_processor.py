@@ -37,10 +37,14 @@ PROMPT_PATH = REPO_ROOT / "apps" / "orchestrator" / "prompts" / "document-triage
 INBOX_DIR = REPO_ROOT / "sync" / "inbox"
 PROCESSED_DIR = REPO_ROOT / "sync" / "processed"
 REJECTED_DIR = REPO_ROOT / "sync" / "rejected"
+MEDIA_DIR = REPO_ROOT / "sync" / "media"   # parked here while awaiting the GPU worker
 DB_PATH = Path(os.environ.get("DB_PATH", str(REPO_ROOT / "db" / "assistant.db")))
 
 SUPPORTED_TEXT_SUFFIXES = {".txt", ".md", ".csv", ".json", ".xml", ".html"}
 SUPPORTED_DOC_SUFFIXES = {".pdf"}
+# Media types the Pi can't process itself — queued for gpu_worker.py
+AUDIO_SUFFIXES = {".m4a", ".mp3", ".wav", ".ogg", ".opus", ".flac"}
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
 
 # document-triage-agent rule: discard below 0.5. Tasks between this and
 # CONFIDENCE_THRESHOLD (0.7) are kept but gated by should_require_approval.
@@ -124,6 +128,47 @@ def call_document_agent(*, document_text: str, file_name: str, source_type: str)
     return [parsed]
 
 
+def enqueue_media(
+    path: Path,
+    kind: str,
+    *,
+    dry_run: bool = False,
+    db_path: Path | None = None,
+) -> dict:
+    """
+    Park an audio/image file for the GPU worker: move it to sync/media/ and
+    insert a job with status 'awaiting_gpu' (invisible to the executor —
+    gpu_worker.py owns that status). The worker extracts text when the GPU
+    box is reachable and feeds it back through normal triage.
+    """
+    payload = {
+        "title": f"[{kind}] {path.name}",
+        "media_kind": kind,
+        "media_path": str(MEDIA_DIR / path.name),
+    }
+    if dry_run:
+        return {**payload, "_dry_run": True}
+
+    _move(path, MEDIA_DIR)
+    conn = open_db(db_path or DB_PATH)
+    try:
+        job_id = insert_job(
+            conn,
+            source_type="file",
+            source_ref=str(path),
+            payload=payload,
+            intent="document_triage",
+            approval_required=False,
+        )
+        if job_id is None:
+            return {**payload, "_skipped": "duplicate"}
+        conn.execute("UPDATE jobs SET status='awaiting_gpu' WHERE id=?", (job_id,))
+        conn.commit()
+        return {**payload, "_job_id": job_id, "_status": "awaiting_gpu"}
+    finally:
+        conn.close()
+
+
 def process_file(
     path: Path,
     *,
@@ -133,7 +178,14 @@ def process_file(
     """
     Triage a single file. Returns list of task result dicts.
     Moves file to processed/ or rejected/ unless dry_run=True.
+    Audio/image files are parked for the GPU worker instead of triaged here.
     """
+    suffix = path.suffix.lower()
+    if suffix in AUDIO_SUFFIXES:
+        return [enqueue_media(path, "audio", dry_run=dry_run, db_path=db_path)]
+    if suffix in IMAGE_SUFFIXES:
+        return [enqueue_media(path, "image", dry_run=dry_run, db_path=db_path)]
+
     source_ref = str(path)
     document_text = read_file_text(path)
 

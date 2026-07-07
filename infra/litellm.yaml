@@ -38,11 +38,29 @@ model_list:
       mode: chat
       base_model: llama3.1
 
+  - model_name: local-agent
+    litellm_params:
+      # Hermes 3 (Nous Research, llama3.1 finetune) — trained for function
+      # calling and schema-exact JSON, the two things triage and HA-intent
+      # extraction lean on hardest. ollama_chat/ (not ollama/) so LiteLLM uses
+      # /api/chat, which carries tool definitions through to Hermes' template.
+      # Pull on the Windows box: ollama pull hermes3:8b (~4.7GB, fits 8-12GB VRAM).
+      model: ollama_chat/hermes3:8b
+      api_base: os.environ/OLLAMA_BASE_URL
+      drop_params: true
+    model_info:
+      mode: chat
+      base_model: hermes3
+
 router_settings:
   routing_strategy: simple-shuffle
   fallbacks:
     - {"assistant-default": ["assistant-small", "planner"]}
     - {"planner": ["assistant-default"]}
+    # Windows box off → non-private agent traffic falls back to the cloud.
+    # local-private keeps NO fallback on purpose: tag:private requests fail
+    # closed rather than leak to a cloud API.
+    - {"local-agent": ["assistant-small"]}
   num_retries: 2
   retry_after: 5
 

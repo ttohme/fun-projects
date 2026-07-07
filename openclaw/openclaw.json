@@ -24,6 +24,11 @@
         "reason": "Private-tagged requests never leave the host"
       },
       {
+        "match": {"tag": "agent"},
+        "model": "local-agent",
+        "reason": "Tool-calling/structured-output tasks routed to Hermes 3 on the GPU box; LiteLLM falls back to assistant-small when it is offline"
+      },
+      {
         "match": {"tag": "planning"},
         "model": "planner",
         "reason": "Planning tasks routed to Anthropic via LiteLLM"

@@ -29,6 +29,7 @@ units=(assistant-watcher.service assistant-executor.service \
        assistant-briefing.service assistant-briefing.timer \
        assistant-calendar.service assistant-calendar.timer \
        assistant-health.service assistant-health.timer \
+       assistant-gpu.service assistant-gpu.timer \
        assistant-alert@.service)
 if [ "${INSTALL_OPENCLAW:-0}" = "1" ]; then
   units+=(assistant-openclaw.service)
@@ -46,7 +47,7 @@ done
 systemctl daemon-reload
 systemctl enable --now assistant-watcher.service assistant-executor.service
 systemctl enable --now assistant-backup.timer assistant-ledger.timer assistant-nudge.timer \
-  assistant-briefing.timer assistant-calendar.timer assistant-health.timer
+  assistant-briefing.timer assistant-calendar.timer assistant-health.timer assistant-gpu.timer
 if [ "${INSTALL_OPENCLAW:-0}" = "1" ]; then
   systemctl enable --now assistant-openclaw.service
 fi

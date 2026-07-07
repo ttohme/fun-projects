@@ -33,6 +33,25 @@ for name in "${!TARGETS[@]}"; do
   fi
 done
 
+# Ollama / GPU box: informational — the box is on-demand, so unreachable is
+# "OFF", not a failure. But reachable WITHOUT the expected models is a real
+# problem (someone forgot ollama pull) and does fail the check.
+if [ -n "${OLLAMA_BASE_URL:-}" ]; then
+  tags_json="$(curl -fsS --max-time "$TIMEOUT" "${OLLAMA_BASE_URL%/}/api/tags" 2>/dev/null || true)"
+  if [ -z "$tags_json" ]; then
+    echo "  OFF  ollama  ${OLLAMA_BASE_URL} (on-demand box is off — not a failure)"
+  else
+    for model in llama3.1 hermes3; do
+      if echo "$tags_json" | grep -q "\"$model"; then
+        echo "  OK   ollama  model $model present"
+      else
+        echo "  DOWN ollama  box is up but model '$model' is missing — run: ollama pull $model" >&2
+        fail=1
+      fi
+    done
+  fi
+fi
+
 # Backup freshness: the nightly timer should leave a snapshot < 26h old.
 # Only checked when BACKUP_DIR exists and has at least one snapshot (so a
 # fresh install without backups yet doesn't alarm).

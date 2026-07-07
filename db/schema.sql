@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     dedupe_key       TEXT    NOT NULL UNIQUE,   -- SHA256(source_ref + "|" + title); prevents double-processing
     status           TEXT    NOT NULL DEFAULT 'pending',
                                                 -- 'pending' | 'approved' | 'rejected' | 'done' | 'error' | 'dead_letter'
+                                                -- | 'awaiting_gpu' (media jobs owned by gpu_worker.py)
     intent           TEXT,                      -- classified intent set by the triage agent
     payload_json     TEXT    NOT NULL,          -- raw intake payload serialised as JSON text
     result_json      TEXT,                      -- output from the processing node, if any

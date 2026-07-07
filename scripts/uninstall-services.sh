@@ -15,7 +15,8 @@ units=(assistant-watcher.service assistant-executor.service \
        assistant-backup.timer assistant-ledger.service assistant-ledger.timer \
        assistant-nudge.service assistant-nudge.timer assistant-briefing.service \
        assistant-briefing.timer assistant-calendar.service assistant-calendar.timer \
-       assistant-health.service assistant-health.timer assistant-alert@.service)
+       assistant-health.service assistant-health.timer assistant-gpu.service \
+       assistant-gpu.timer assistant-alert@.service)
 
 for u in "${units[@]}"; do
   systemctl disable --now "$u" 2>/dev/null || true

@@ -1,0 +1,11 @@
+[Unit]
+Description=AI Assistant — GPU media worker every 10 minutes
+# Jobs simply defer when the Windows box is off, so a tight cadence is cheap.
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

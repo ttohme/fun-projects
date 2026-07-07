@@ -33,6 +33,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PROMPT_PATH = REPO_ROOT / "apps" / "orchestrator" / "prompts" / "triage-agent.md"
 
 LITELLM_BASE_URL = os.environ.get("LITELLM_BASE_URL", "http://localhost:4000")
+
+# Local-first routing: set TRIAGE_MODEL=local-agent to run the high-volume
+# triage path on Hermes 3 (Windows GPU) — LiteLLM's fallback chain sends the
+# request to assistant-small automatically when the box is off, so this is
+# safe to leave on permanently. Default stays the cloud planner.
+TRIAGE_MODEL = os.environ.get("TRIAGE_MODEL", "planner")
 LITELLM_MASTER_KEY = os.environ.get("LITELLM_MASTER_KEY", "")
 DB_PATH = Path(os.environ.get("DB_PATH", str(REPO_ROOT / "db" / "assistant.db")))
 
@@ -61,7 +67,7 @@ def _strip_frontmatter(text: str) -> str:
     return text
 
 
-def call_litellm(prompt: str, model: str = "planner") -> str:
+def call_litellm(prompt: str, model: str | None = None) -> str:
     """POST to LiteLLM /chat/completions, return raw content string."""
     url = f"{LITELLM_BASE_URL}/chat/completions"
     headers = {"Content-Type": "application/json"}
@@ -69,7 +75,7 @@ def call_litellm(prompt: str, model: str = "planner") -> str:
         headers["Authorization"] = f"Bearer {LITELLM_MASTER_KEY}"
 
     body = {
-        "model": model,
+        "model": model or TRIAGE_MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "response_format": {"type": "json_object"},
         "temperature": 0.1,

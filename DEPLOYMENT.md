@@ -79,6 +79,7 @@ docker compose --env-file infra/env/.env -f infra/docker-compose.pi4.yml up -d
 # Ollama natively (gets GPU): https://ollama.com/download
 ollama serve
 ollama pull llama3.1
+ollama pull hermes3:8b   # local-agent alias: function-calling finetune, ~4.7GB, fits 8-12GB VRAM
 # OpenHands in Docker Desktop (--env-file required, see Pi 4 note):
 docker compose --env-file infra/env/.env -f infra/docker-compose.windows.yml up -d
 ```

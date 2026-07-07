@@ -1,7 +1,7 @@
 .PHONY: up down logs db-init watcher evals validate test approve execute capture \
         bootstrap backup restore-db healthcheck install-services uninstall-services \
         logrotate-install dead-letters hass-cache ledger-sync nudges briefing \
-        calendar-ingest help
+        calendar-ingest gpu-work wake-gpu help
 
 ENV_FILE := infra/env/.env
 
@@ -54,6 +54,12 @@ briefing: ## Build and push the morning briefing (--dry-run via ARGS)
 
 calendar-ingest: db-init ## Generate prep tasks from the calendar (--dry-run via ARGS)
 	PYTHONPATH=apps/orchestrator $(PYTHON) apps/orchestrator/calendar_ingest.py run $(ARGS)
+
+gpu-work: db-init ## Process awaiting_gpu media jobs once (transcribe/OCR/summarize)
+	PYTHONPATH=apps/orchestrator $(PYTHON) apps/orchestrator/gpu_worker.py run
+
+wake-gpu: ## Send a Wake-on-LAN packet to the Windows GPU box (GPU_MAC in .env)
+	scripts/wake-gpu.sh
 
 execute: db-init ## Run job executor once (--dry-run to preview, --watch to poll)
 	$(PYTHON) apps/orchestrator/job_executor.py $(ARGS)
