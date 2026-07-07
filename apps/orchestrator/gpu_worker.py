@@ -206,8 +206,12 @@ def run_once(conn, *, limit: int = 10) -> list[dict]:
         return []
 
     if WAKE_ON_QUEUE:
-        subprocess.run([str(REPO_ROOT / "scripts" / "wake-gpu.sh")],
-                       capture_output=True, timeout=30)
+        try:
+            subprocess.run([str(REPO_ROOT / "scripts" / "wake-gpu.sh")],
+                           capture_output=True, timeout=30)
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            # The wake is opportunistic — never let it block job processing.
+            print(f"gpu_worker: wake-gpu skipped: {exc}", file=sys.stderr)
 
     results = []
     for job in jobs:
@@ -247,11 +251,13 @@ def build_digest(conn, *, days: int = 7) -> str:
 
 
 def enqueue_summary(conn, *, text: str, subject: str = "") -> int | None:
-    from db import insert_job
+    from db import _now, insert_job
+    # Date in the ref so a recurring subject ("AI Weekly") dedupes within a
+    # day but is accepted again next issue.
     job_id = insert_job(
         conn,
         source_type="email",
-        source_ref=f"digest:{subject[:60]}",
+        source_ref=f"digest:{_now()[:10]}:{subject[:60]}",
         payload={"title": f"[summarize] {subject or text[:40]}",
                  "media_kind": "summarize", "subject": subject, "text": text},
         intent="document_triage",

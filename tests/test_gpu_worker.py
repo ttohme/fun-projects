@@ -141,7 +141,31 @@ def test_summarize_job_and_weekly_digest():
     assert "AI Weekly" in digest and "model news" in digest
 
 
-def test_enqueue_summary_dedupes():
+def test_enqueue_summary_dedupes_within_a_day():
     conn = fresh_db()
     assert enqueue_summary(conn, text="body", subject="Same Subject") is not None
     assert enqueue_summary(conn, text="body", subject="Same Subject") is None
+
+
+def test_enqueue_summary_accepts_recurring_subject_next_day():
+    # Regression: "AI Weekly" must not dedupe forever after its first issue.
+    conn = fresh_db()
+    with patch("db._now", return_value="2026-07-07T09:00:00.000Z"):
+        assert enqueue_summary(conn, text="issue 1", subject="AI Weekly") is not None
+    with patch("db._now", return_value="2026-07-14T09:00:00.000Z"):
+        assert enqueue_summary(conn, text="issue 2", subject="AI Weekly") is not None
+
+
+def test_wake_gpu_timeout_never_blocks_processing(tmp_path):
+    # Regression: a hung wake-gpu.sh crashed run_once before any job ran.
+    import subprocess as sp
+    conn = fresh_db()
+    _media_job(conn, tmp_path)
+    with patch.object(gpu_worker, "WAKE_ON_QUEUE", True), \
+         patch("gpu_worker.subprocess.run",
+               side_effect=sp.TimeoutExpired(cmd="wake-gpu.sh", timeout=30)), \
+         patch("gpu_worker.transcribe_audio", return_value="do the thing"), \
+         patch("triage.triage", return_value=dict(DERIVED_TASK)), \
+         patch("gpu_worker.PROCESSED_DIR", tmp_path / "processed"):
+        results = run_once(conn)
+    assert results[0]["status"] == "done"
