@@ -42,7 +42,7 @@ TRIAGE_MODEL = os.environ.get("TRIAGE_MODEL", "planner")
 LITELLM_MASTER_KEY = os.environ.get("LITELLM_MASTER_KEY", "")
 DB_PATH = Path(os.environ.get("DB_PATH", str(REPO_ROOT / "db" / "assistant.db")))
 
-HIGH_RISK_INTENTS = {"delete_task", "home_control_write", "send_email"}
+HIGH_RISK_INTENTS = {"delete_task", "home_control_write", "send_email", "code_job"}
 CONFIDENCE_THRESHOLD = 0.7
 
 
@@ -112,6 +112,20 @@ def triage(
     system_prompt = _strip_frontmatter(template)
     rendered = render_prompt(system_prompt, input_content=input_content,
                              source_type=source_type, source_ref=source_ref)
+
+    # Standing facts (memory.py) sharpen classification. Only read from a DB
+    # that already exists — never create one as a side effect of a dry run.
+    facts_db = db_path or DB_PATH
+    if Path(facts_db).exists():
+        try:
+            from memory import facts_block
+            fconn = open_db(facts_db)
+            try:
+                rendered += facts_block(fconn)
+            finally:
+                fconn.close()
+        except Exception:
+            pass  # facts are an enhancement, never a blocker
 
     raw = call_litellm(rendered)
     try:

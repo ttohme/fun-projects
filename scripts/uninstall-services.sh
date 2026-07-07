@@ -17,6 +17,9 @@ units=(assistant-watcher.service assistant-executor.service \
        assistant-briefing.timer assistant-calendar.service assistant-calendar.timer \
        assistant-health.service assistant-health.timer assistant-gpu.service \
        assistant-gpu.timer assistant-improve.service assistant-improve.timer \
+       assistant-maintenance.service assistant-maintenance.timer \
+       assistant-review.service assistant-review.timer \
+       assistant-digest.service assistant-digest.timer \
        assistant-alert@.service)
 
 for u in "${units[@]}"; do

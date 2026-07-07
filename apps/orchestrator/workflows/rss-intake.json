@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "__REPLACE_WITH_N8N_INSTANCE_ID__"
+  },
+  "name": "RSS → Read-later digest",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["intake", "rss"],
+  "_setup_notes": [
+    "Import this file into n8n via Settings → Import workflow.",
+    "Required nodes to configure after import:",
+    "  1. RSS Feed Read (n8n native) — your feeds, Schedule Trigger every 2h",
+    "  2. Filter — keyword allowlist/denylist first (free, deterministic)",
+    "  3. Execute Command — queue survivors for the weekend GPU digest:",
+    "     PYTHONPATH=apps/orchestrator .venv/bin/python apps/orchestrator/gpu_worker.py",
+    "     enqueue-summary --subject '{{title}}' --text '{{contentSnippet}} {{link}}'",
+    "  4. The weekly digest push (gpu_worker.py digest) includes them; when the",
+    "     GPU box stays off, entries ship links-only — still useful."
+  ]
+}

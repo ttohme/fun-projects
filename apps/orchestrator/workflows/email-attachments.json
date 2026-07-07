@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "__REPLACE_WITH_N8N_INSTANCE_ID__"
+  },
+  "name": "Email attachments → file pipeline",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["intake", "email"],
+  "_setup_notes": [
+    "Import this file into n8n via Settings → Import workflow.",
+    "Routes email attachments into the existing file pipeline — PDFs get real",
+    "extraction, images go to the GPU OCR lane, everything gets dedupe + gating.",
+    "Required nodes to configure after import:",
+    "  1. Email Trigger (IMAP) — same account as the email-to-todoist workflow",
+    "  2. IF — has attachments; size < 20MB; extension allowlist",
+    "     (.pdf .txt .md .csv .jpg .png .m4a — matches document_processor)",
+    "  3. Write Binary File — into sync/inbox/ (the watcher picks it up from",
+    "     there exactly like a Syncthing drop; no new code path)",
+    "  4. No-op otherwise — the email body itself already flows through triage."
+  ]
+}

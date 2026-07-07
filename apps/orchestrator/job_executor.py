@@ -12,8 +12,9 @@ Intent routing:
     create_task / update_task / document_triage  → todoist_client
     home_control_write                            → hass_client
     home_control_read                             → hass_client (read-only)
+    code_job                                      → OpenHands sandbox (Windows box)
+    prompt_revision                               → gated prompt promotion
     send_email                                    → not yet implemented (logs warning)
-    code_job                                      → not yet implemented (logs warning)
     unknown                                       → logged and skipped
 
 CLI:
@@ -65,13 +66,14 @@ TODOIST_INTENTS = {"create_task", "update_task", "document_triage"}
 HASS_WRITE_INTENTS = {"home_control_write"}
 HASS_READ_INTENTS = {"home_control_read"}
 PROMPT_INTENTS = {"prompt_revision"}
-UNIMPLEMENTED_INTENTS = {"send_email", "code_job", "delete_task"}
+CODE_INTENTS = {"code_job"}
+UNIMPLEMENTED_INTENTS = {"send_email", "delete_task"}
 
 # AGENTS.md: these must never run without an approval decision, so they are
 # excluded from auto-proceed even if a row was inserted with approval_required=0.
 # prompt_revision changes system behavior — a human always signs off.
 HIGH_RISK_INTENTS = {"delete_task", "home_control_write", "send_email",
-                     "prompt_revision"}
+                     "prompt_revision", "code_job"}
 
 
 def _get_approved_jobs(conn) -> list:
@@ -170,11 +172,22 @@ def _dispatch(intent: str, payload: dict) -> dict:
         return _execute_hass_read(payload)
     if intent in PROMPT_INTENTS:
         return _execute_prompt_revision(payload)
+    if intent in CODE_INTENTS:
+        return _execute_code_job(payload)
     if intent in UNIMPLEMENTED_INTENTS:
         raise NotImplementedError(
             f"Intent '{intent}' is not yet automated — handle manually or via n8n"
         )
     raise NotImplementedError(f"Unknown intent: {intent!r}")
+
+
+def _execute_code_job(payload: dict) -> dict:
+    """
+    Dispatch an approved code_job to the OpenHands sandbox on the Windows box.
+    Box off -> ConnectionError -> normal retry/backoff ladder keeps it alive.
+    """
+    from openhands_client import run_code_job
+    return run_code_job(payload)
 
 
 def _execute_todoist(payload: dict) -> dict:

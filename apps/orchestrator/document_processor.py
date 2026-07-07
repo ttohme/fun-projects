@@ -256,18 +256,30 @@ def process_file(
             conn.close()
 
     if not dry_run:
-        dest = PROCESSED_DIR if all_valid else REJECTED_DIR
-        _move(path, dest)
+        dest_dir = PROCESSED_DIR if all_valid else REJECTED_DIR
+        final_path = _move(path, dest_dir)
+        if dest_dir is PROCESSED_DIR:
+            # Best-effort: make the document findable via `make ask`.
+            try:
+                from doc_search import index_text
+                conn2 = open_db(db_path or DB_PATH)
+                try:
+                    index_text(conn2, path=str(final_path), content=document_text)
+                finally:
+                    conn2.close()
+            except Exception:
+                pass
 
     return results
 
 
-def _move(src: Path, dest_dir: Path) -> None:
+def _move(src: Path, dest_dir: Path) -> Path:
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / src.name
     if dest.exists():
         dest = dest_dir / f"{src.stem}_{src.stat().st_ino}{src.suffix}"
     shutil.move(str(src), str(dest))
+    return dest
 
 
 def main() -> None:

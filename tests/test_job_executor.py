@@ -254,9 +254,10 @@ def test_dispatch_send_email_raises_not_implemented():
         _dispatch("send_email", {})
 
 
-def test_dispatch_code_job_raises_not_implemented():
-    with pytest.raises(NotImplementedError, match="code_job"):
-        _dispatch("code_job", {})
+def test_dispatch_code_job_routes_to_openhands():
+    with patch("job_executor._execute_code_job", return_value={"state": "finished"}) as mock:
+        _dispatch("code_job", {"title": "Fix flaky test"})
+    mock.assert_called_once()
 
 
 def test_dispatch_unknown_intent_raises_not_implemented():

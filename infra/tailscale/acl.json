@@ -30,11 +30,12 @@
       ]
     },
 
-    // ── Pi 5 (brain) → Windows Ollama, for the local-private model ──────────
+    // ── Pi 5 (brain) → Windows: Ollama (local models), OpenHands (code_job
+    //    dispatch), Whisper server (voice memo transcription) ────────────────
     {
       "action": "accept",
       "src": ["tag:brain"],
-      "dst": ["tag:muscle:11434"]
+      "dst": ["tag:muscle:11434", "tag:muscle:3333", "tag:muscle:8000"]
     },
 
     // ── Pi 5 (brain) → Pi 4 Langfuse, for traces ────────────────────────────

@@ -1,7 +1,8 @@
 .PHONY: up down logs db-init watcher evals validate test approve execute capture \
         bootstrap backup restore-db healthcheck install-services uninstall-services \
         logrotate-install dead-letters hass-cache ledger-sync nudges briefing \
-        calendar-ingest gpu-work wake-gpu improve help
+        calendar-ingest gpu-work wake-gpu improve remember facts ask \
+        weekly-review project-brief home-qa help
 
 ENV_FILE := infra/env/.env
 
@@ -63,6 +64,27 @@ wake-gpu: ## Send a Wake-on-LAN packet to the Windows GPU box (GPU_MAC in .env)
 
 improve: db-init ## Run the continuous-improvement pipeline once (mine, eval, report)
 	scripts/improvement_run.sh
+
+remember: db-init ## Store a standing fact: make remember FACT="gym is tuesdays" [TOPIC=routine]
+	@if [ -z "$(FACT)" ]; then echo "ERROR: FACT is required"; exit 1; fi
+	PYTHONPATH=apps/orchestrator $(PYTHON) apps/orchestrator/memory.py add "$(FACT)" --topic "$(or $(TOPIC),general)"
+
+facts: db-init ## List standing facts
+	PYTHONPATH=apps/orchestrator $(PYTHON) apps/orchestrator/memory.py list
+
+ask: db-init ## Search processed documents: make ask Q="water bill"
+	@if [ -z "$(Q)" ]; then echo "ERROR: Q is required"; exit 1; fi
+	PYTHONPATH=apps/orchestrator $(PYTHON) apps/orchestrator/doc_search.py ask "$(Q)"
+
+weekly-review: db-init ## Push the weekly review (--dry-run via ARGS)
+	PYTHONPATH=apps/orchestrator $(PYTHON) apps/orchestrator/reviews.py weekly $(ARGS)
+
+project-brief: db-init ## Print the per-project health snapshot
+	PYTHONPATH=apps/orchestrator $(PYTHON) apps/orchestrator/reviews.py brief
+
+home-qa: ## Ask the house a read-only question: make home-qa Q="is the kitchen light on"
+	@if [ -z "$(Q)" ]; then echo "ERROR: Q is required"; exit 1; fi
+	PYTHONPATH=apps/orchestrator $(PYTHON) -c "from hass_client import process_conversation; import json,sys; print(json.dumps(process_conversation('$(Q)'), indent=2))"
 
 execute: db-init ## Run job executor once (--dry-run to preview, --watch to poll)
 	$(PYTHON) apps/orchestrator/job_executor.py $(ARGS)

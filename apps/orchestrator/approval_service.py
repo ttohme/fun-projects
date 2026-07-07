@@ -165,13 +165,30 @@ def format_approval_for_review(item: dict) -> str:
         f"  Confidence  : {payload.get('confidence', '?')}",
         f"  Requested   : {item['approval_requested_at']}",
     ]
+    if item.get("similar_note"):
+        lines.append(f"  ⚠ Similar   : {item['similar_note']}")
     return "\n".join(lines)
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
+def _annotate_similar(conn, items: list[dict]) -> list[dict]:
+    """Attach a near-duplicate advisory to each pending approval."""
+    try:
+        from memory import similar_note
+    except ImportError:
+        return items
+    for item in items:
+        payload = json.loads(item.get("payload_json", "{}"))
+        title = payload.get("title", "")
+        if title:
+            item["similar_note"] = similar_note(
+                conn, title, exclude_job_id=item["job_id"])
+    return items
+
+
 def cmd_list(args, conn) -> None:
-    items = list_pending_approvals(conn)
+    items = _annotate_similar(conn, list_pending_approvals(conn))
     if not items:
         print("No pending approvals.")
         return
@@ -188,7 +205,7 @@ def cmd_decide(args, conn) -> None:
 
 def cmd_review(args, conn) -> None:
     """Interactive one-at-a-time approval review."""
-    items = list_pending_approvals(conn)
+    items = _annotate_similar(conn, list_pending_approvals(conn))
     if not items:
         print("No pending approvals.")
         return

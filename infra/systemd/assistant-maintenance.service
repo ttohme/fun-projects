@@ -1,0 +1,12 @@
+[Unit]
+Description=AI Assistant — weekly maintenance code-job enqueue (approval-gated)
+Documentation=https://github.com/ttohme/fun-projects
+OnFailure=assistant-alert@%n.service
+
+[Service]
+Type=oneshot
+User=__USER__
+WorkingDirectory=__REPO__
+EnvironmentFile=__REPO__/infra/env/.env
+Environment=PYTHONPATH=__REPO__/apps/orchestrator
+ExecStart=__REPO__/.venv/bin/python apps/orchestrator/maintenance.py enqueue

@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "__REPLACE_WITH_N8N_INSTANCE_ID__"
+  },
+  "name": "Home Scenes (natural language, approval-gated)",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": ["home", "scenes"],
+  "_setup_notes": [
+    "Import this file into n8n via Settings → Import workflow.",
+    "Natural-language scene compilation: 'movie night' → validated HA service call.",
+    "Required nodes to configure after import:",
+    "  1. Webhook — POST /webhook/scene; body: {\"request\": \"movie night\"}",
+    "  2. Execute Command — dump the entity cache for the prompt:",
+    "     PYTHONPATH=apps/orchestrator .venv/bin/python apps/orchestrator/hass_registry.py list",
+    "  3. HTTP Request (LiteLLM) — prompts/scene-compiler-agent.md with {{request}}",
+    "     and {{entities}} substituted; model local-agent (Hermes 3, cloud fallback)",
+    "  4. Execute Command — insert the returned task object as a job; it is",
+    "     home_control_write, so it ALWAYS lands in the approval queue and the",
+    "     executor validates every entity against the registry cache before the",
+    "     HA call (hallucinated entities are rejected, not retried).",
+    "  5. Respond — reply with the compiled scene + 'waiting for your approval'.",
+    "Approve from the phone (one-tap) and the executor fires the scene."
+  ]
+}
