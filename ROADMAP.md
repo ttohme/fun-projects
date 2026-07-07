@@ -14,6 +14,10 @@ lenses, consolidated and phased). Every feature obeys four rules:
 
 Phases are ordered by value-per-effort and dependency; each is independently shippable.
 
+**Status: all five phases implemented** (see git history for the per-phase
+commits; 243 tests). Remaining upgrade hooks are noted inline — sqlite-vec
+embeddings beside the FTS5 index, Kokoro TTS upgrade for the briefing.
+
 Effort: S = hours, M = a day-ish, L = multi-day.
 
 ---
